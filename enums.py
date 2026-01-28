@@ -116,6 +116,14 @@ class Card(IntEnum):
     QUEEN_OF_SPADES = 51
     KING_OF_SPADES = 52
 
+    @classmethod
+    def from_rank_suit(cls, rank: Rank, suit: Suit) -> "Card":
+        if not isinstance(rank, Rank):
+            raise TypeError("rank must be a Rank")
+        if not isinstance(suit, Suit):
+            raise TypeError("suit must be a Suit")
+        return cls(suit * 13 + rank)
+
     @property
     def rank(self) -> Rank:
         return Rank((self.value - 1) % 13 + 1)

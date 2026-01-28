@@ -2,35 +2,72 @@ import pytest
 
 from cards import (
     CardSet,
-    Card,
-    Rank,
-    Suit,
-    ACE_OF_SPADES,
-    KING_OF_SPADES,
-    QUEEN_OF_SPADES,
-    TWO_OF_CLUBS,
-    THREE_OF_CLUBS,
 )
-
+from enums import *
+# Import Card, Rank, Suit, and all Enums
 
 # ---------- Enum tests ----------
 
 def test_card_rank_and_suit():
     c = ACE_OF_SPADES
-    assert c.rank == Rank.ACE
-    assert c.suit == Suit.SPADES
+    assert c.rank == ACE
+    assert c.suit == SPADES
 
 
 def test_card_names():
     c = QUEEN_OF_SPADES
     assert c.long_name() == "Queen of Spades"
     assert c.short_name() == "Q♠"
+    c = TEN_OF_CLUBS
+    assert c.long_name() == "Ten of Clubs"
+    assert c.short_name() == "T♣"
+    c = ACE_OF_DIAMONDS
+    assert c.long_name() == "Ace of Diamonds"
+    assert c.short_name() == "A♦"
+    c = FOUR_OF_HEARTS
+    assert c.long_name() == "Four of Hearts"
+    assert c.short_name() == "4♥"
 
 
 def test_card_ordering():
-    assert Card.ACE_OF_CLUBS < Card.KING_OF_CLUBS
-    assert Card.KING_OF_CLUBS < Card.ACE_OF_DIAMONDS
+    assert ACE_OF_CLUBS < TWO_OF_CLUBS
+    assert TEN_OF_CLUBS < JACK_OF_CLUBS
+    assert KING_OF_CLUBS < ACE_OF_DIAMONDS
+    assert KING_OF_DIAMONDS < ACE_OF_HEARTS
+    assert KING_OF_HEARTS < ACE_OF_SPADES
 
+# ----------- Card Creation -------------
+
+def test_from_rank_suit_all_suits_ace():
+    assert Card.from_rank_suit(Rank.ACE, Suit.CLUBS) == ACE_OF_CLUBS
+    assert Card.from_rank_suit(Rank.ACE, Suit.DIAMONDS) == ACE_OF_DIAMONDS
+    assert Card.from_rank_suit(Rank.ACE, Suit.HEARTS) == ACE_OF_HEARTS
+    assert Card.from_rank_suit(Rank.ACE, Suit.SPADES) == ACE_OF_SPADES
+
+
+def test_from_rank_suit_round_trip():
+    """ Ensure rank/suit properties round-trip correctly.  """
+    for card in Card:
+        rebuilt = Card.from_rank_suit(card.rank, card.suit)
+        assert rebuilt is card
+
+
+def test_from_rank_suit_identity():
+    """ Must return the *existing enum member*, not a new object.  """
+    c1 = Card.from_rank_suit(Rank.QUEEN, Suit.HEARTS)
+    c2 = Card.QUEEN_OF_HEARTS
+
+    assert c1 is c2
+
+
+def test_from_rank_suit_invalid_rank_type():
+    with pytest.raises(TypeError):
+        Card.from_rank_suit(1, Suit.CLUBS)  # type: ignore
+
+
+def test_from_rank_suit_invalid_suit_type():
+    with pytest.raises(TypeError):
+        Card.from_rank_suit(Rank.ACE, 0)  # type: ignore
 
 # ---------- CardSet initialization ----------
 
@@ -43,8 +80,8 @@ def test_empty_cardset():
 def test_standard_deck():
     deck = CardSet.standard_deck()
     assert len(deck) == 52
-    assert deck.cards[0] == Card.ACE_OF_CLUBS
-    assert deck.cards[-1] == Card.KING_OF_SPADES
+    assert deck.cards[0] == ACE_OF_CLUBS
+    assert deck.cards[-1] == KING_OF_SPADES
 
 
 # ---------- Add ----------
