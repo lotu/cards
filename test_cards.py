@@ -75,6 +75,10 @@ def test_empty_cardset():
     cs = CardSet()
     assert len(cs) == 0
     assert not cs
+    # test creation from empty card set
+    cs2 = CardSet(cs)
+    assert len(cs2) == 0
+
 
 
 def test_standard_deck():
@@ -146,6 +150,12 @@ def test_draw_from_empty_raises():
     cs = CardSet()
     with pytest.raises(IndexError):
         cs.draw()
+
+
+def test_draw_with_card_raises():
+    cs = CardSet([ACE_OF_SPADES, KING_OF_SPADES, QUEEN_OF_SPADES])
+    with pytest.raises(ValueError):
+        cs.draw(ACE_OF_SPADES)
 
 
 # ---------- Slicing ----------

@@ -3,6 +3,8 @@ from typing import Iterable, List
 
 from enums import Card
 
+##
+
 class CardSet:
     def __init__(self, cards: Iterable[Card] | None = None):
         """Initialize empty or with an iterable of cards."""
@@ -39,7 +41,7 @@ class CardSet:
         """
         Adds cards to the CardSet.
         Can be called like:
-            add(card1, card2, card3)
+            add(card1,  card2, card3)
             add([card1, card2, card3])
         """
         if len(cards) == 1 and isinstance(cards[0], Iterable) and not isinstance(cards[0], Card):
@@ -63,6 +65,8 @@ class CardSet:
             draw()      -> Card
             draw(n)     -> list[Card]
         """
+        if isinstance(n, Card):
+            raise ValueError("Draw takes numbers not specific cards")
         if n is None:
             if not self.cards:
                 raise IndexError("Cannot draw from empty CardSet")
@@ -76,6 +80,34 @@ class CardSet:
         drawn = self.cards[:n]
         del self.cards[:n]
         return drawn
+
+    def pick(self, *cards):
+        """
+        Remove & Return  cards to the CardSet.
+        Can be called like:
+            pick(card1,  card2, card3)
+            pick([card1, card2, card3])
+        """
+        if len(cards) == 1 and isinstance(cards[0], Iterable) and not isinstance(cards[0], Card):
+            # Single iterable of cards
+            to_pick = list(cards[0])
+        else:
+            # Multiple card arguments
+            to_pick = list(cards)
+
+
+        picked = []
+        for c in to_pick:
+            if not isinstance(c, Card):
+                raise TypeError(f"Expected Card, got {type(c)}")
+            try:
+                index = self.cards.index(c)
+                picked.append( self.cards.pop(index))
+            except ValueError:
+                pass # Card not present
+
+        return picked
+
 
     # -------- Length ----------
 
@@ -108,11 +140,12 @@ class CardSet:
     # Might add latter
     # is_empty --- not deck also works
     # peek() --- deck[0] already works
+    ##
 
 class Seat:
 
     def __init__(self, name = ""):
-        self.name = name
+        self.name = str(name)
         self.hand = CardSet()
         self.tablaue = CardSet()
 
@@ -124,81 +157,139 @@ class Table:
         self.discard = CardSet()
         self.seats = [Seat(n) for n in range(seats)]
 
-def render_first(table):
-    """
-    Render a 4-player table in ASCII art.
+    def __str__(self) -> str:
+        return ''
+   ##
 
-    Parameters:
-        table: Table object with
-            table.seats[0] = North
-            table.seats[1] = East
-            table.seats[2] = South
-            table.seats[3] = West
-            Each seat has .hand (CardSet) with short names
-        table.discard: CardSet
-    """
+def table_to_str(t):
+    grid = init_grid(60,40)
 
-    # Helper: split a hand into lines of 4 cards each
-    def hand_lines(hand, per_line=4):
-        cards = [c.short_name() for c in hand]  # using short card name
-        lines = []
-        for i in range(0, len(cards), per_line):
-            lines.append(" ".join(cards[i:i+per_line]))
-        return lines
+    replace_subgrid(grid,seat_to_grid(t.seats[0]),20,30)
+    replace_subgrid(grid,seat_to_grid(t.seats[1]),40,20)
+    replace_subgrid(grid,seat_to_grid(t.seats[2]), 5,20)
+    replace_subgrid(grid,seat_to_grid(t.seats[3]),20, 5)
 
-    # Maximum number of lines per hand (for alignment)
-    max_lines = 5  # 20 cards max, 4 per line
+    replace_subgrid(grid,card_grid(str(len(t.stack))), 25, 20)
+    replace_subgrid(grid,card_grid(t.discard[-1]), 25, 25)
 
-    north_lines = hand_lines(table.seats[0].hand)
-    south_lines = hand_lines(table.seats[2].hand)
-    east_lines  = hand_lines(table.seats[1].hand)
-    west_lines  = hand_lines(table.seats[3].hand)
+    return grid_to_str(grid)
 
-    # Pad hands to max_lines
-    def pad_lines(lines):
-        while len(lines) < max_lines:
-            lines.append("")
-        return lines
+## 
+def describe_table(t: Table) -> str:
+    """Returns a readable summary of the current table state."""
+    description = []
 
-    north_lines = pad_lines(north_lines)
-    south_lines = pad_lines(south_lines)
-    east_lines  = pad_lines(east_lines)
-    west_lines  = pad_lines(west_lines)
+    # Central Piles
+    description.append("--- Central Piles ---")
+    description.append(f"Stack: {len(t.stack)} cards remaining.")
+    description.append(f"Discard Pile: {t.discard.format('short') if t.discard else 'Empty'}")
+    description.append("")
 
-    # Width of left and right hands
-    left_width = max(len(line) for line in west_lines)
-    right_width = max(len(line) for line in east_lines)
+    # Player Seats
+    description.append("--- Player Seats ---")
+    for i, seat in enumerate(t.seats):
+        name = seat.name if seat.name else f"Player {i}"
 
-    # Center discard card
-    if table.discard:
-        center_card = table.discard[-1].short_name()
-        center_card = Card.ACE_OF_SPADES
-    else:
-        center_card = "__"
+        # Format Hand and Tableau
+        hand_str = seat.hand.format("short") if seat.hand else "Empty"
+        tableau_str = seat.tablaue.format("short") if seat.tablaue else "Empty"
 
-    center_block = f"|{center_card}|"
+        description.append(f"Seat {i} ({name}):")
+        description.append(f"  Hand:    {len(seat.hand)} cards")
+        description.append(f"  Tableau: [{tableau_str}]")
+        description.append("-" * 20)
 
-    # Horizontal spacing between hands and center
-    h_space = 4
+    return "\n".join(description)
+##
+def seat_to_grid(s):
+    grid = init_grid(11,10)
+    tablaue = hand_lines(s.tablaue)
+    grid = replace_subgrid(grid, hand_lines(s.tablaue), 0, 0) 
+    grid = replace_subgrid(grid, ['-' * 11 ], 0, 4) 
+    grid = replace_subgrid(grid, hand_lines(s.hand), 0, 5) 
+    grid = replace_subgrid(grid, [ s.name ], 0, 9)
+    return grid
+##
+def card_grid(str_value):
+    if isinstance(str_value, Card):
+        str_value = str_value.short_name()
+    g = '''┌──┐
+│  │
+└──┘'''
+    grid = [list(line) for line in g.split('\n')]
+    if len(str_value) == 2:
+       grid[1][1] = str_value[0]
+       grid[1][2] = str_value[1]
+    if len(str_value) == 1:
+       grid[1][2] = str_value[0]
+    return grid
 
-    # Render North
-    north_str = " " * (left_width + h_space) + " " + "\n".join(north_lines)
-    print(north_str)
 
-    # Render middle rows: West | Center | East
-    for w, e in zip(west_lines, east_lines):
-        line = f"{w.ljust(left_width)}{' ' * h_space}{center_block}{' ' * h_space}{e.ljust(right_width)}"
-        print(line)
+##
 
-    # Render South
-    south_str = " " * (left_width + h_space) + " " + "\n".join(south_lines)
-    print(south_str)
+# Helper: split a hand into lines of 4 cards each
+def hand_lines(hand, per_line=4):
+    cards = [c.short_name() for c in hand]  # using short card name
+    lines = []
+    for i in range(0, len(cards), per_line):
+        lines.append(" ".join(cards[i:i+per_line]))
+    return lines
+##
 
-def init_grid(w, h, c=' ') -> List[List[String]]:
+##
+def init_grid(w, h, c=' ') -> list[list[str]]:
     return [[c for x in range(w)] for y in range(h)]
 
- '\n'.join(["".join(l) for l in s])
+ ##
+def grid_to_str(grid) -> str:
+    return '\n'.join(["".join(line) for line in grid])
+##
 
-render = render_first
+def pad_grid(grid, padding=' ', length = 0):
+    """ Add padding to string """
+    if not grid:
+        return grid
 
-__all__ = ( ["CardSet", "Table", "Seat", "render"] )
+    pad_to = max( length, max([len(line) for line in grid]) ) if len(grid) != 0 else  0
+ 
+    # Add enough padding to each line make pad_to long.
+    if isinstance(grid[0], str):
+        return [line + padding * (pad_to - len(line))  for line in grid]
+    else:
+        return [line + [ padding  for _ in range (pad_to - len(line))]  for line in grid]
+
+##
+
+def str_list_to_grid(str_list):
+    return [list(line) for line in replacement]
+
+def replace_subgrid(original, replacement, start_col, start_row):
+    """
+    Replaces a portion of 'original' with 'replacement' starting at 
+    (start_row, start_col).
+    """
+    if not replacement:
+        return original
+
+    # Ensure replacement is a list of lists of characters
+    # This handles cases where replacement might be a list of strings
+    formatted_replacement = [list(line) for line in pad_grid(replacement)]
+    
+    rows_to_replace = len(formatted_replacement)
+    cols_to_replace = len(formatted_replacement[0])
+
+    for i in range(rows_to_replace):
+        for j in range(cols_to_replace):
+            target_row = start_row + i
+            target_col = start_col + j
+            
+            # Boundary check: don't write outside the original grid
+            if target_row < len(original) and target_col < len(original[0]):
+                original[target_row][target_col] = formatted_replacement[i][j]
+                
+    return original
+
+##
+
+
+# __all__ = ( ["CardSet", "Table", "Seat", ] )
