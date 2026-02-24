@@ -1,5 +1,7 @@
 import asyncio
 import os
+from cards import Table, table_to_str, describe_table
+from enums import Card
 
 class Player:
     def __init__(self, player_id, fifo_dir):
@@ -25,7 +27,7 @@ class Player:
     def send_message(self, message):
         if self.fd_out is not None:
             try:
-                os.write(self.fd_out, f"{message}\n".encode())
+                os.write(self.fd_out, message.encode())
             except OSError:
                 pass
 
@@ -64,32 +66,70 @@ class Player:
 
 class GameServer:
     def __init__(self, player_count=4, fifo_dir="fifo"):
+        # UI Control Booleans
+        self.show_text_desc = False
+        self.show_grid_ui = True
+
+        self.fifo_dir = fifo_dir
         self.players = [Player(i, fifo_dir) for i in range(1, player_count + 1)]
         self.turn_number = 1
+        
+        # 1. Create the Table
+        self.table = Table(seats=player_count)
+        
+        # Sync Table Seat names with Player names
+        for i, player in enumerate(self.players):
+            self.table.seats[i].name = player.name
+
+    def setup_game(self):
+        """Handles shuffling and dealing logic."""
+        print("Initializing deck and dealing cards...")
+        # 1. Use standard deck and shuffle
+        self.table.deck.shuffle()
+        
+        # 2. Deal each player 7 cards
+        for seat in self.table.seats:
+            seat.hand.add(self.table.deck.draw(7))
+            
+        # 3. Place remaining cards in the stack
+        self.table.stack.add(self.table.deck.draw(len(self.table.deck)))
+
+    async def broadcast_state(self):
+        """Sends the board representation to all players."""
+        output_parts = []
+        
+        output_parts.append(f"\n--- TURN {self.turn_number} ---\n")
+        
+        # Send representations based on booleans
+        if self.show_text_desc:
+            output_parts.append(describe_table(self.table))
+            output_parts.append("\n")
+
+        if self.show_grid_ui:
+            output_parts.append(table_to_str(self.table))
+            output_parts.append("\n")
+
+        output_parts.append("\nPress [ENTER] in your input terminal to advance...")
+        full_payload = "".join(output_parts)
+
+        for p in self.players:
+            p.send_message(full_payload)
 
     async def run_game(self):
+        self.setup_game()
         for player in self.players:
             player.connect()
         
         try:
             while True:
-                # 1. Announce Turn
-                for p in self.players:
-                    p.send_message(f"\n--- TURN {self.turn_number} ---")
-                    if self.turn_number > 1:
-                        for other in self.players:
-                            p.send_message(f"{other.name} said: {other.last_input}")
-                    p.send_message("Type your move and press Enter:")
-
-                print(f"Server: Waiting for all {len(self.players)} players...")
-
-                # 2. WAIT FOR ALL (This is the blocking part)
-                # We use asyncio.gather to wait for every player's poll to return
-                results = await asyncio.gather(*(p.wait_for_input() for p in self.players))
+                await self.broadcast_state()
                 
-                print(f"Server: All inputs received: {results}")
+                print(f"Server: Waiting for players to acknowledge Turn {self.turn_number}...")
+                
+                # 4. Wait for all players to send a line (ignoring the content for now)
+                await asyncio.gather(*(p.wait_for_input() for p in self.players))
+                
                 self.turn_number += 1
-                
         except KeyboardInterrupt:
             print("\nShutting down.")
 

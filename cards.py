@@ -162,15 +162,16 @@ class Table:
    ##
 
 def table_to_str(t):
-    grid = init_grid(60,40)
+    grid = init_grid(45,30)
 
-    replace_subgrid(grid,seat_to_grid(t.seats[0]),20,30)
-    replace_subgrid(grid,seat_to_grid(t.seats[1]),40,20)
-    replace_subgrid(grid,seat_to_grid(t.seats[2]), 5,20)
-    replace_subgrid(grid,seat_to_grid(t.seats[3]),20, 5)
+    replace_subgrid(grid,seat_to_grid(t.seats[0]),15,20)
+    replace_subgrid(grid,seat_to_grid(t.seats[1]),35,10)
+    replace_subgrid(grid,seat_to_grid(t.seats[2]), 1,10)
+    replace_subgrid(grid,seat_to_grid(t.seats[3]),15,0)
 
-    replace_subgrid(grid,card_grid(str(len(t.stack))), 25, 20)
-    replace_subgrid(grid,card_grid(t.discard[-1]), 25, 25)
+    replace_subgrid(grid,card_grid(str(len(t.stack))), 20, 13)
+    replace_subgrid(grid,card_grid(
+        t.discard[-1] if len(t.discard) > 0 else ''), 20, 18)
 
     return grid_to_str(grid)
 
