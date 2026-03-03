@@ -1,4 +1,6 @@
 from enum import IntEnum
+from dataclasses import dataclass
+from typing import Optional
 
 
 class Rank(IntEnum):
@@ -141,18 +143,79 @@ class Card(IntEnum):
     def __str__(self) -> str:
         return self.long_name()
 
+
+class SeatPart(IntEnum):
+    HAND = 0
+    TABLEAU = 1
+
+# --- Action Enums (Explicitly defined values) ---
+
+class Location(IntEnum):
+    P1_HAND = 1
+    P1_TABLEAU = 2
+    P2_HAND = 3
+    P2_TABLEAU = 4
+    P3_HAND = 5
+    P3_TABLEAU = 6
+    P4_HAND = 7
+    P4_TABLEAU = 8
+    STACK = 9 # Logic depends on this being the first shared location
+    DISCARD = 10
+
+    @classmethod
+    def from_seat(cls, seat: int, part: SeatPart) -> "Location":
+        if not isinstance(seat, int) or seat < 1 or seat > 4:
+            raise ValueError("seat must be an int between 1 and 4")
+        if not isinstance(part, SeatPart):
+            raise TypeError("part must be a SeatPart")
+        return cls((seat - 1) * 2 + part + 1)
+
+    @property
+    def shared(self) -> bool:
+        return self.value >= STACK
+
+    @property
+    def player(self) -> Optional[int]:
+        # Returns 1-4 for players, None for shared
+        return ((self.value - 1) // 2) + 1 if not self.shared else None
+
+    @property
+    def seat_part(self) -> Optional[SeatPart]:
+        return  SeatPart((self.value - 1) % 2) if not self.shared else None
+
+@dataclass
+class Action:
+    """A structured representation of a player's intent."""
+    source: Location
+    target: Location
+    count: int = 1
+    cards: Optional[Card] = None
+
+    def __repr__(self):
+        details = []
+        if self.source: details.append(f"source={self.source.name}")
+        if self.target: details.append(f"target={self.target.name}")
+        if self.count > 1: details.append(f"count={self.count}")
+        if self.cards: details.append(f"cards={self.cards}")
+        return f"Action({', '.join(details)})"
+
+
 # ---------- Re-export enum members ----------
 
 
 globals().update(Suit.__members__)
 globals().update(Rank.__members__)
 globals().update(Card.__members__)
+globals().update(SeatPart.__members__)
+globals().update(Location.__members__)
 
 __all__ = (
-    ["Rank", "Suit", "Card"]
+    ["Rank", "Suit", "Card", "SeatPart", "Location", "Action"]
     + list(Rank.__members__)
     + list(Suit.__members__)
     + list(Card.__members__)
+    + list(SeatPart.__members__)
+    + list(Location.__members__)
 )
 
 

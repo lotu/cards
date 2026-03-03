@@ -49,7 +49,7 @@ def init_table(): # Same table as from test draw methods
     assert not TEN_OF_CLUBS in t.seats[0].hand
     assert TEN_OF_CLUBS in t.discard
 
-    t.seats[1].tablaue.add(t.seats[1].hand.pick([  ACE_OF_DIAMONDS
+    t.seats[1].tableau.add(t.seats[1].hand.pick([  ACE_OF_DIAMONDS
                                                  , THREE_OF_DIAMONDS
                                                  , JACK_OF_DIAMONDS
                                                  , KING_OF_SPADES]))

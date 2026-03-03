@@ -1,7 +1,9 @@
 import asyncio
 import os
+import re
 from cards import Table, table_to_str, describe_table
-from enums import Card
+from enums import *
+from parse import parse_card
 
 class Player:
     def __init__(self, player_id, fifo_dir):
@@ -98,7 +100,7 @@ class GameServer:
         """Sends the board representation to all players."""
         output_parts = []
         
-        output_parts.append(f"\n--- TURN {self.turn_number} ---\n")
+        output_parts.append(f"\n\n\n--- TURN {self.turn_number} ---\n")
         
         # Send representations based on booleans
         if self.show_text_desc:
@@ -126,12 +128,67 @@ class GameServer:
                 
                 print(f"Server: Waiting for players to acknowledge Turn {self.turn_number}...")
                 
-                # 4. Wait for all players to send a line (ignoring the content for now)
-                await asyncio.gather(*(p.wait_for_input() for p in self.players))
+                # Wait for all players to send a line (ignoring the content for now)
+                inputs = await asyncio.gather(*(p.wait_for_input() for p in self.players))
+
+                # Interpret each player's input
+                for i, text in enumerate(inputs):
+                    action = interpret_input(text, i, self.table)
+                    if action:
+                        print(f"Player {i+1} wants to: {action}")
+                        try:
+                            # 4. Execute
+                            self.table.execute_action(action)
+                        except ValueError as e:
+                            self.players[i].send_message(f"Invalid move: {e}\n")
                 
                 self.turn_number += 1
         except KeyboardInterrupt:
             print("\nShutting down.")
+
+
+def interpret_input(text: str, player_idx: int, table: Table) -> Optional[Action]:
+    """
+    Parses player input into a structured Action object.
+    Does NOT modify the game state.
+    """
+    s = text.lower().strip()
+    if not s:
+        return None
+
+    # The target for a draw is always that player's hand
+    target_loc = Location.from_seat(player_idx + 1, SeatPart.HAND)
+
+    # 1. Check for a specific card name (e.g., "Ace of Spades" from discard)
+    if len(table.discard) > 0:
+        try:
+            target_card = parse_card(s)
+            # If they named the top card of the discard pile
+            if target_card == table.discard[-1]:
+                return Action(
+                    source=Location.DISCARD,
+                    target=target_loc,
+                    cards=target_card
+                )
+        except ValueError:
+            pass # Not a card name, continue to general draw logic
+
+    # 2. Check for general "Draw" keywords
+    draw_keywords = ["draw", "take", "get", "pick", "hit"]
+    if any(k in s for k in draw_keywords):
+        print(s)
+        # Determine quantity
+        count_match = re.search(r'\d+', s)
+        count = int(count_match.group()) if count_match else 1
+
+        # Determine source (default to Stack)
+        from_discard = "discard" in s or "pile" in s
+        source_loc = Location.DISCARD if from_discard else Location.STACK
+
+        return Action(source=source_loc, target=target_loc, count=count)
+
+    return None
+
 
 if __name__ == "__main__":
     server = GameServer()

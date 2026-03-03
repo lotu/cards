@@ -1,7 +1,7 @@
 import random
 from typing import Iterable, List
 
-from enums import Card
+from enums import *
 
 ##
 
@@ -59,7 +59,7 @@ class CardSet:
 
     def draw(self, n: int | None = None):
         """
-        Draw cards from the top of the CardSet.
+        Draw cards from the top always 0 index first of the CardSet.
 
         Usage:
             draw()      -> Card
@@ -147,27 +147,67 @@ class Seat:
     def __init__(self, name = ""):
         self.name = str(name)
         self.hand = CardSet()
-        self.tablaue = CardSet()
+        self.tableau = CardSet()
 
 class Table:
 
-    def __init__(self, seats = 4):
-        self.deck = CardSet.standard_deck()
+    def __init__(self, seats = 4, empty=False):
+        self.deck = CardSet.standard_deck() if not empty else CardSet()
         self.stack = CardSet()  # pile to draw from I didn't like draw.draw()
         self.discard = CardSet()
         self.seats = [Seat(n) for n in range(seats)]
 
     def __str__(self) -> str:
         return ''
+
+    def _get_cardset(self, location: Location):
+        """Resolves a Location enum to a physical CardSet instance on the table."""
+        if location == Location.STACK:
+            return self.stack
+        if location == Location.DISCARD:
+            return self.discard
+
+        # Player-specific locations (P1-P4)
+        seat_idx = location.player - 1
+        seat = self.seats[seat_idx]
+
+        if location.seat_part == SeatPart.HAND:
+            return seat.hand
+        else:
+            return seat.tableau
+
+    def execute_action(self, action: Action) -> bool:
+        """Performs the physical movement of cards defined by the Action."""
+        source = self._get_cardset(action.source)
+        target = self._get_cardset(action.target)
+
+        # Case 1: Moving a specific named card (e.g., from Discard)
+        if action.cards:
+            if action.cards in source.cards:
+                source.pick(action.cards)
+                target.add(action.cards)
+            else:
+                return False
+
+        # Case 2: Moving a quantity of cards (e.g., Drawing from Stack)
+        else:
+            # We draw whatever is available up to the requested count
+            actual_count = min(len(source.cards), action.count)
+            if len(source) >= action.count:
+                target.add( source.draw(actual_count) )
+            else:
+                return False
+
+        return True
    ##
 
 def table_to_str(t):
     grid = init_grid(45,30)
 
     replace_subgrid(grid,seat_to_grid(t.seats[0]),15,20)
-    replace_subgrid(grid,seat_to_grid(t.seats[1]),35,10)
-    replace_subgrid(grid,seat_to_grid(t.seats[2]), 1,10)
-    replace_subgrid(grid,seat_to_grid(t.seats[3]),15,0)
+    replace_subgrid(grid,seat_to_grid(t.seats[1]), 1,10)
+    replace_subgrid(grid,seat_to_grid(t.seats[2]),15, 0)
+    replace_subgrid(grid,seat_to_grid(t.seats[3]),35,10)
 
     replace_subgrid(grid,card_grid(str(len(t.stack))), 20, 13)
     replace_subgrid(grid,card_grid(
@@ -193,7 +233,7 @@ def describe_table(t: Table) -> str:
 
         # Format Hand and Tableau
         hand_str = seat.hand.format("short") if seat.hand else "Empty"
-        tableau_str = seat.tablaue.format("short") if seat.tablaue else "Empty"
+        tableau_str = seat.tableau.format("short") if seat.tableau else "Empty"
 
         description.append(f"Seat {i} ({name}):")
         description.append(f"  Hand:    {len(seat.hand)} cards")
@@ -204,8 +244,8 @@ def describe_table(t: Table) -> str:
 ##
 def seat_to_grid(s):
     grid = init_grid(11,10)
-    tablaue = hand_lines(s.tablaue)
-    grid = replace_subgrid(grid, hand_lines(s.tablaue), 0, 0) 
+    tableau = hand_lines(s.tableau)
+    grid = replace_subgrid(grid, hand_lines(s.tableau), 0, 0) 
     grid = replace_subgrid(grid, ['-' * 11 ], 0, 4) 
     grid = replace_subgrid(grid, hand_lines(s.hand), 0, 5) 
     grid = replace_subgrid(grid, [ s.name ], 0, 9)
