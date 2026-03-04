@@ -1,108 +1,87 @@
 import pytest
 from gameserver import  interpret_input
-from cards import Table, CardSet
+from cards import Table
 from enums import *
 
-@pytest.fixture
-def table():
-    """Provides a clean Table for testing."""
-    return Table(seats=2, empty=True)
+# --- Test Parsing of Complex Interactions ---
 
-# --- interpret_input Tests ---
+@pytest.mark.parametrize("text, player_idx, expected_source, expected_target, expected_card, expected_count", [
+    # Playing to own tableau
+    ("play Ace of Spades", 0, None, P1_TABLEAU, [ACE_OF_SPADES], 1),
+    ("put King of Hearts on table", 1, None, P2_TABLEAU, [KING_OF_HEARTS], 1),
 
-def test_interpret_draw_command(table):
-    """Verify string 'draw 3' translates to correct Action object."""
-    # Player 1 (idx 0)
-    action = interpret_input("draw 3", 0, table)
+    # Taking from other players
+    ("take from p2", 0, P2_HAND, P1_HAND, None, 1),
+    ("steal from p1 tableau", 1, P1_TABLEAU, P2_HAND, None, 1),
+    ("grab from p2 board", 0, P2_TABLEAU, P1_HAND, None, 1),
 
-    assert action.source == STACK
-    assert action.target == P1_HAND
-    assert action.count == 3
-    assert action.cards is None
-
-def test_interpret_discard_command(table):
-    """Verify string 'get from discard' translates to correct Action."""
-    action = interpret_input("take from pile", 1, table)
-
-    assert action.source == DISCARD
-    assert action.target == P2_HAND
-
-def test_interpret_specific_card_logic(table):
-    """Verify naming a card on top of discard creates a specific Action."""
-    top_card = ACE_OF_SPADES
-    table.discard.cards = [TWO_OF_CLUBS, top_card]
-
-    # Note: interpret_input uses your parse_card logic
-    action = interpret_input("Ace of Spades", 0, table)
-
-    assert action.source == DISCARD
-    assert action.cards == top_card
-
-# --- Integrated Logic Test ---
-
-def test_full_logic_loop(table):
-    """Test the flow from string -> Action -> Table update."""
-    table.stack.cards = [JACK_OF_DIAMONDS]
-
-    # 1. Interpret
-    action = interpret_input("draw 1", 0, table)
-
-    # 2. Execute
-    table.execute_action(action)
-
-    # 3. Verify
-    assert len(table.stack.cards) == 0
-    assert JACK_OF_DIAMONDS in table.seats[0].hand.cards
-
-def test_interpret_draw_basic(table):
-    """Verify 'draw' keyword defaults to stack and correct player hand."""
-    # Player 1 (idx 0)
-    action = interpret_input("draw", 0, table)
-    assert isinstance(action, Action)
-    assert action.source == STACK
-    assert action.target == P1_HAND
-    assert action.count == 1
-
-    # Player 2 (idx 1)
-    action = interpret_input("hit", 1, table)
-    assert action.target == P2_HAND
-
-def test_interpret_draw_with_count(table):
-    """Verify numeric extraction from strings like 'draw 3'."""
-    action = interpret_input("draw 5 cards", 0, table)
-    assert action.count == 5
-    assert action.source == STACK
-
-def test_interpret_draw_from_discard(table):
-    """Verify keywords like 'discard' or 'pile' switch the source."""
-    action = interpret_input("take from discard", 0, table)
-    assert action.source == DISCARD
+    # Giving to other players
+    ("give Ace of Spades to p2", 0, None, P2_HAND, [ACE_OF_SPADES], 1),
+    ("pass card to p1", 1, P2_HAND, P1_HAND, None, 1),
+    ("give to p2 tableau", 0, P1_HAND, P2_TABLEAU, None, 1),
     
-    action = interpret_input("get from pile", 0, table)
-    assert action.source == DISCARD
+    # Standard draw logic 
+    ("draw 3", 0, STACK, P1_HAND, None, 3),
+    ("take from discard", 1, DISCARD, P2_HAND, None, 1),
+    ("take from pile", 1, DISCARD, P2_HAND, None, 1),
+    ("pick A♣ from p3's tableau", 1, P3_TABLEAU, P2_HAND, [ACE_OF_CLUBS], 1),
+    ("put three of clubs in p2's hand", 0, None, P2_HAND, [THREE_OF_CLUBS], 1),
+    ("draw 4 of diamonds", 0, None, P1_HAND, [FOUR_OF_DIAMONDS], 1),
 
-def test_interpret_specific_card_name( table):
-    """Verify that naming the top discard card generates a specific Action."""
-    target_card = ACE_OF_SPADES
-    table.discard.cards = [TWO_OF_CLUBS, ACE_OF_SPADES]
+    # Basic drawing
+    ("draw", 0, STACK, P1_HAND, None, 1),
+    ("hit", 0, STACK, P1_HAND, None, 1),
+    ("take", 1, STACK, P2_HAND, None, 1), 
+
+    # Drawing with counts
+    ("draw 3", 0, STACK, P1_HAND, None, 3),
+    ("draw 5 cards", 1, STACK, P2_HAND, None, 5),
+
+    ("discard 1", 0, P1_HAND, DISCARD, None, 1),
+    ("dump KH, JD", 2, None, DISCARD, [KING_OF_HEARTS, JACK_OF_DIAMONDS], 2),
+    ("trash TD from tableau", 0, P1_TABLEAU, DISCARD, [TEN_OF_DIAMONDS], 1),
+    ("dump 3 from my hand", 3, P4_HAND, DISCARD, None, 3),
+
+    # Drawing from discard/pile
+    ("take from discard", 0, DISCARD, P1_HAND, None, 1),
+    ("get from pile", 1, DISCARD, P2_HAND, None, 1), 
+    ("draw 2 from discard", 0, DISCARD, P1_HAND, None, 2),
+
+    # Grabing specifc cards doesn't require a source
+    ("get ace of spades", 0, None, P1_HAND, [ACE_OF_SPADES], 1),
+
+    # --- Interactions between players ---
+    ("take from p2", 0, P2_HAND, P1_HAND, None, 1),      # P1 steals from P2
+    ("give to p1", 1, P2_HAND, P1_HAND, None, 1),      # P2 gives to P1
+    ("steal from p1 tableau", 0, P1_TABLEAU, P1_HAND, None, 1), # Oops, P1 steals from self?
+    ("grab from p2 tableau", 0, P2_TABLEAU, P1_HAND, None, 1),  # P1 takes from P2's board
+    ("pass", 0, P1_HAND, P2_HAND, None, 1),
+    ("transfer four of diamonds from p1's Tableau to p3's hand", 2, P1_TABLEAU, P3_HAND, [FOUR_OF_DIAMONDS], 1),
+    ("send 4 cards from the stack to p3's hand", 2, STACK, P3_HAND, None, 4),
+
+])
+def test_interactions(text, player_idx, expected_source, expected_target, expected_card, expected_count):
+    action = interpret_input(text, player_idx)
     
-    # Input matches the top card of discard
-    action = interpret_input("Ace of Spades", 0, table)
-    assert action.source == DISCARD
-    assert action.cards == target_card
+    assert action is not None
+    assert action.source == expected_source
+    assert action.target == expected_target
+    assert action.count == expected_count
+    if expected_card:
+        assert action.cards == expected_card
 
-def test_interpret_specific_card_not_on_top(table):
-    """Verify that naming a card NOT on top of discard doesn't trigger a draw."""
-    table.discard.cards = [KING_OF_HEARTS] # Top is King
-    
-    # User asks for Ace (which isn't there)
-    # This should fail the 'target_card == discard[-1]' check and return None 
-    # or fall back to general draw if 'draw' is in the text.
-    action = interpret_input("Ace of Spades", 0, table)
-    assert action is None
+# --- Parameterized 'None' / Garbage Tests ---
 
-def test_interpret_garbage_input(table):
-    """Verify that unrelated text returns None."""
-    assert interpret_input("hello?", 0, table) is None
-    assert interpret_input("pass", 0, table) is None
-    assert interpret_input("", 0, table) is None
+@pytest.mark.parametrize("text", [
+    "Ace of Spades",
+    "king of hearts",
+    "Get Put Ace of Spades",
+    "hello?",
+    "",
+    "   ",
+    "invalid command",
+    # "draw nothing", # technically 0 or invalid count might return None depending on regex
+])
+def test_invalid_input(text):
+    """Verify that unrelated or empty text returns None."""
+    assert interpret_input(text, 0) is None

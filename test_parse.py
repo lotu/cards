@@ -111,6 +111,7 @@ def test_parse_card_valid(text, expected):
 
         # ---- Typos / near-misses ----
         "Aec of Spades",
+        "Ace of Spade"
         "Quen of Hearts",
         "Jack Spade Club",
 
@@ -118,6 +119,10 @@ def test_parse_card_valid(text, expected):
         "Ace, of Spades",
         "Ace/of/Spades",
         "Ace.of.Spades",
+
+        # ---- Extra words ----
+        "Give Ace of Spades"
+        "Ace of Spades is coolest"
 
         # ---- Unicode but malformed ----
         "A♥♠",

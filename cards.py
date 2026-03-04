@@ -183,11 +183,8 @@ class Table:
 
         # Case 1: Moving a specific named card (e.g., from Discard)
         if action.cards:
-            if action.cards in source.cards:
-                source.pick(action.cards)
-                target.add(action.cards)
-            else:
-                return False
+            cards = target.add(source.pick(action.cards))
+            return cards
 
         # Case 2: Moving a quantity of cards (e.g., Drawing from Stack)
         else:

@@ -200,7 +200,7 @@ class Action:
     source: Location
     target: Location
     count: int = 1
-    cards: Optional[Card] = None
+    cards: list[Card] = None 
 
     def __repr__(self):
         details = []

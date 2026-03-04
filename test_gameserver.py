@@ -2,7 +2,8 @@ import asyncio
 import os
 import pytest
 import shutil
-from gameserver import Player, GameServer # Ensure your script is named correctly
+from cards import *
+from gameserver import *
 
 FIFO_TEST_DIR = "test_fifo"
 
