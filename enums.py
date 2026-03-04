@@ -40,6 +40,8 @@ class Rank(IntEnum):
     def long(self) -> str:
         return self.name.title()
 
+    def __str__(self) -> str:
+        return self.long()
 
 class Suit(IntEnum):
     CLUBS = 0
@@ -59,6 +61,9 @@ class Suit(IntEnum):
     @property
     def long(self) -> str:
         return self.name.title()
+
+    def __str__(self) -> str:
+        return self.long()
 
 
 class Card(IntEnum):
@@ -148,6 +153,9 @@ class SeatPart(IntEnum):
     HAND = 0
     TABLEAU = 1
 
+    def __str__(self) -> str:
+        return self.name.title()
+
 # --- Action Enums (Explicitly defined values) ---
 
 class Location(IntEnum):
@@ -182,6 +190,9 @@ class Location(IntEnum):
     @property
     def seat_part(self) -> Optional[SeatPart]:
         return  SeatPart((self.value - 1) % 2) if not self.shared else None
+
+    def __str__(self) -> str:
+        return self.name.title()
 
 @dataclass
 class Action:
