@@ -1,0 +1,5 @@
+
+# Ignore warnings about import *
+# E701 Ignore warings about `if foo: bar` on one line
+ignore = ["F405", "F403", "E701"]
+
