@@ -1,12 +1,9 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from copy import deepcopy
 from enums import *
 from cards import *
-
-@pytest.fixture
-def table():
-    """Provides a clean Table for testing."""
-    return Table(seats=2, empty=True)
+from parse import parse_card_set
+from logging import *
 
 # --------------- Locate Card -------------
 def test_location_has_cards_basic():
@@ -125,6 +122,7 @@ def test_seat_sees_cards_visibility_rules():
 
 # --------- Execute Action ----------------
 
+
 @pytest.mark.parametrize("action, setup_cards, expected_source_len, expected_target_len", [
     # Scenario 1: Player 1 plays a card from hand to their own tableau
     (
@@ -153,7 +151,7 @@ def test_seat_sees_cards_visibility_rules():
         0, 1
     ),
 ])
-def test_execute_player_moves(table, action, setup_cards, expected_source_len, expected_target_len):
+def test_execute_player_moves_old(table, action, setup_cards, expected_source_len, expected_target_len):
     """Verify Table.execute_action correctly moves cards between player zones."""
     # 1. Setup the state
     for loc, card_list in setup_cards.items():
@@ -172,156 +170,81 @@ def test_execute_player_moves(table, action, setup_cards, expected_source_len, e
     if action.cards:
         assert action.cards in table._get_cardset(action.target).cards
 
-# --- Test Execution of Complex Interactions ---
+@pytest.fixture
+def table():
+    """Provides a clean Table for testing."""
+    t =  Table(seats=4, empty=True)
+    t.stack.add(parse_card_set("A♠ 2♠ 3♠ 4♠ 5♠ 6♠ 7♠ 8♠ 9♠ T♠")) 
+    t.discard.add(parse_card_set("A♢ 2♢ 3♢ 4♢ 5♢ 6♢ 7♢ 8♢ 9♢ T♢")) 
+    t.seats[0].hand.add(parse_card_set("A♡ 2♡ 3♡ 4♡ 5♡ 6♡ 7♡ 8♡ 9♡ T♡"))
+    t.seats[1].hand.add(parse_card_set("A♣ 2♣ 3♣ 4♣ 5♣ 6♣ 7♣ 8♣ 9♣ T♣"))
+    t.seats[1].tableau.add(parse_card_set("K♠ K♡ K♣ K♢")) 
+    t.seats[2].tableau.add(parse_card_set("Q♠ Q♡ Q♣ Q♢")) 
+    t.seats[2].hand.add(parse_card_set("J♠ J♡ J♣ J♢")) 
+    return t
 
-@pytest.mark.parametrize("action, setup_data", [
-    # Scenario: P1 steals from P2's hand
-    (
-        Action(source=P2_HAND, target=P1_HAND, count=1),
-        {P2_HAND: [ACE_OF_SPADES], P1_HAND: []}
-    ),
-    # Scenario: P1 plays specific card to own tableau
-    (
-        Action(source=P1_HAND, target=P1_TABLEAU, cards=KING_OF_HEARTS),
-        {P1_HAND: [KING_OF_HEARTS], P1_TABLEAU: []}
-    ),
-    # Scenario: P2 gives a card to P1's tableau
-    (
-        Action(source=P2_HAND, target=P1_TABLEAU, cards=TEN_OF_DIAMONDS),
-        {P2_HAND: [TEN_OF_DIAMONDS], P1_TABLEAU: []}
-    ),
-])
+@pytest.mark.parametrize(
+    "cards, count, source, target, expected, not_expected",
+    [
+        # 1 Play specific card from P1 hand to P1 tableau
+        (ACE_OF_HEARTS, 1, P1_HAND, P1_TABLEAU,
+         {P1_TABLEAU: [ACE_OF_HEARTS]}, {P1_HAND: [ACE_OF_HEARTS]}
+        ),
+        # Draw 2 Cards
+        (None, 2, STACK, P4_HAND,
+         {P4_HAND: [ACE_OF_SPADES, TWO_OF_SPADES]}, {STACK: [ACE_OF_SPADES, TWO_OF_SPADES]}
+        ),
+        # Draw 2 Cards
+        (None, 2, DISCARD, P4_HAND,
+         {P4_HAND: [ACE_OF_DIAMONDS, TWO_OF_DIAMONDS]}, {STACK: [ACE_OF_DIAMONDS, TWO_OF_DIAMONDS]}
+        ),
+        # Get specific card from discard
+        (TWO_OF_DIAMONDS, 1, DISCARD, P4_HAND,
+         {P4_HAND: [TWO_OF_DIAMONDS]}, {STACK: [TWO_OF_DIAMONDS]}
+        ),
+        # Get specific card form discard without naming
+        (THREE_OF_DIAMONDS, 1, None, P4_HAND,
+         {P4_HAND: [THREE_OF_DIAMONDS]}, {STACK: [THREE_OF_DIAMONDS]}
+        ),
+        # Play a specific card
+        (TEN_OF_HEARTS, 1, P1_HAND, P1_TABLEAU,
+         {P1_TABLEAU: [TEN_OF_HEARTS]}, {P1_HAND: [TEN_OF_HEARTS]}
+        ),
+    ],
+)
+def test_execute_player_moves(table, source, target, cards, count, expected, not_expected):
+    """Verify execute_action moves exact card contents correctly."""
+    # ---- Execute ----
+    # assert isinstance(cards, Card)
+    assert table.execute_action(Action(source, target, count, cards))
+    debug(f"table:\n{table.__str__()}")
 
-def test_execute_interaction_movement(table, action, setup_data):
-    # Setup initial card states
-    for location, cards in setup_data.items():
-        table._get_cardset(location).cards = list(cards)
-    
-    # Execute
-    table.execute_action(action)
-    
-    # Verify target has the cards
-    target_set = table._get_cardset(action.target)
-    if action.cards:
-        assert action.cards in target_set.cards
-    else:
-        assert len(target_set.cards) == action.count
-    
-    # Verify source is empty (in these specific 1-card scenarios)
-    assert len(table._get_cardset(action.source).cards) == 0
-
-
-def test_execute_draw_stack_to_hand(table):
-    """Verify Table moves multiple cards from stack to hand."""
-    table.stack.cards = [ACE_OF_SPADES, TWO_OF_SPADES, THREE_OF_SPADES]
-
-    # Action: Player 1 draws 2
-    action = Action(source=STACK, target=P1_HAND, count=2)
-    assert table.execute_action(action)
-
-    assert len(table.stack.cards) == 1
-    assert len(table.seats[0].hand.cards) == 2
-    # Only three is left in deck
-    assert THREE_OF_SPADES in table.stack
-
-def test_execute_specific_card_from_discard(table):
-    """Verify Table moves a specific named card from discard."""
-    table.discard.cards = [FOUR_OF_CLUBS, KING_OF_HEARTS, ACE_OF_DIAMONDS]
-
-    # Action: Player 2 takes the King
-    action = Action(source=DISCARD, target=P2_HAND, cards=KING_OF_HEARTS)
-    assert table.execute_action(action)
-
-    assert KING_OF_HEARTS not in table.discard.cards
-    assert KING_OF_HEARTS in table.seats[1].hand.cards
-    assert len(table.discard.cards) == 2
-
-def test_execute_draw_from_stack(table):
-    """Test drawing multiple cards from the stack to a player's hand."""
-    # Setup: Put 3 cards in the stack
-    table.stack.cards = [ACE_OF_SPADES, TWO_OF_SPADES, THREE_OF_SPADES]
-    
-    # Action: Player 1 draws 2 cards
-    action = Action(source=STACK, target=P1_HAND, count=2)
-    assert table.execute_action(action)
-    
-    # Assertions
-    assert len(table.stack.cards) == 1
-    assert len(table.seats[0].hand.cards) == 2
-    # Verify the specific cards moved (assuming .draw() takes from the end/top)
-    assert ACE_OF_SPADES in table.seats[0].hand.cards
-    assert TWO_OF_SPADES in table.seats[0].hand.cards
-
-def test_execute_move_specific_card(table):
-    """Test picking up a specific card from the discard pile."""
-    # Setup: Put a specific card on the discard pile
-    target_card = KING_OF_HEARTS
-    table.discard.cards = [FOUR_OF_CLUBS, target_card]
-    
-    # Action: Player 2 takes the King of Hearts
-    action = Action(
-        source=DISCARD, 
-        target=P2_HAND, 
-        cards=target_card
-    )
-    assert table.execute_action(action)
-    
-    # Assertions
-    assert target_card not in table.discard.cards
-    assert target_card in table.seats[1].hand.cards
-    assert len(table.discard.cards) == 1
-
-def test_execute_tableau_move(table):
-    """Test moving a card from hand to tableau (playing a card)."""
-    # Setup: Player 1 has a card in hand
-    table.seats[0].hand.cards = [TEN_OF_DIAMONDS]
-    
-    # Action: Move card to Tableau
-    action = Action(
-        source=P1_HAND, 
-        target=P1_TABLEAU, 
-        cards=TEN_OF_DIAMONDS
-    )
-    assert table.execute_action(action)
-    
-    # Assertions
-    assert TEN_OF_DIAMONDS not in table.seats[0].hand.cards
-    assert TEN_OF_DIAMONDS in table.seats[0].tableau.cards
-
-def test_execute_empty_source_fails(table):
-    """Verify Table raises ValueError when source is empty."""
-    table.stack.cards = []
-    action = Action(source=STACK, target=P1_HAND, count=1)
-
-    assert not table.execute_action(action)
-
-def test_execute_insufficient_cards(table, capsys):
-    """Test behavior when the source has fewer cards than the action count."""
-    # Setup: Stack only has 1 card
-    table.stack.cards = [ACE_OF_CLUBS]
-    
-    # Action: Player 1 tries to draw 5
-    action = Action(source=STACK, target=P1_HAND, count=2)
-    assert not table.execute_action(action)
-    
-    # Assertions: Should draw at all
-    assert len(table.seats[0].hand.cards) == 0 
-    assert len(table.stack.cards) == 1
-
-def test_invalid_card_not_in_source(table, capsys):
-    """Test behavior when the specific card requested isn't in the source."""
-    # Setup: Discard has a different card
-    table.discard.cards = [TWO_OF_HEARTS]
-    
-    # Action: Try to take a card that isn't there
-    action = Action(
-        source=DISCARD, 
-        target=P1_HAND, 
-        cards=ACE_OF_SPADES
-    )
-    assert not table.execute_action(action)
-    
-    # Assertions
-    assert len(table.seats[0].hand.cards) == 0
+        
+    # ---- Verify exact contents ----
+    for loc, expected_cards in expected.items():
+        actual_cards = table._get_cardset(loc).cards
+        for card in expected_cards:
+            assert card in actual_cards
+        
+    for loc, not_expected_cards in not_expected.items():
+        actual_cards = table._get_cardset(loc).cards
+        for card in not_expected_cards:
+            assert card not in actual_cards
 
 
+@pytest.mark.parametrize(
+    "cards, count, source, target",
+    [
+        ( None, 11, P1_HAND, P1_TABLEAU),
+        ( None, 1, P4_TABLEAU, P4_HAND),
+        ( JACK_OF_DIAMONDS, 1, DISCARD, P4_HAND),
+        ( [ACE_OF_SPADES, ACE_OF_CLUBS], 2, None, P4_HAND),
+    ],
+)
+def test_execute_failure(table, source, target, cards, count):
+    """Verify execute_action moves exact card contents correctly."""
+    # ---- Execute ----
+    before_table = deepcopy(table)
+    assert not table.execute_action(Action(source, target, count, cards))
+        
+    assert before_table == table

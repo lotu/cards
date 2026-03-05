@@ -1,6 +1,7 @@
 import asyncio
 import os
 import re
+from logging import debug
 from cards import Table, table_to_str, describe_table
 from enums import *
 from parse import *
@@ -131,6 +132,7 @@ class GameServer:
                 # Wait for all players to send a line (ignoring the content for now)
                 inputs = await asyncio.gather(*(p.wait_for_input() for p in self.players))
 
+                # TODO Need to have a way so that p1 isn't always interpreted first
                 # Interpret each player's input
                 for i, text in enumerate(inputs):
                     action = interpret_input(text, i)
@@ -236,7 +238,7 @@ def interpret_input(text: str, player_idx: int) -> Optional[Action]:
         r"(from|to|in|on)\s+(p[1-4]('s)?|my)?\s*(the)?\s*(tableau|table|board|discard|hand|pile|stack|deck|draw pile])?", s)
     for pp_match in pp_matches:
         pp_player_num = None
-        print( f'pp_match 0: {pp_match.group(0)}, 1: {pp_match.group(1)}, 2: {pp_match.group(2)}, 3: {pp_match.group(3)}, 4: {pp_match.group(4)} ' )
+        debug( f'pp_match 0: {pp_match.group(0)}, 1: {pp_match.group(1)}, 2: {pp_match.group(2)}, 3: {pp_match.group(3)}, 4: {pp_match.group(4)} ' )
         if pp_match.group(2):
             player_match = re.search(r'p([1-4])', pp_match.group(2))
             pp_player_num = int(player_match.group(1)) if player_match else None
@@ -266,7 +268,7 @@ def interpret_input(text: str, player_idx: int) -> Optional[Action]:
             elif is_tableau: target = my_tableau
             elif is_discard: target = DISCARD
 
-        print (f"s: {source}, t: {target}, cs: {found_cards}, cn: {found_count}")
+        debug (f"s: {source}, t: {target}, cs: {found_cards}, cn: {found_count}")
         # Cleanup string of the locations we found
         s = re.sub(pp_match.group(0), '', s)
 
@@ -301,9 +303,8 @@ def interpret_input(text: str, player_idx: int) -> Optional[Action]:
     is_give = any(k in s for k in ["give", "pass", "transfer", "send"])
     is_discard_action = any(k in s for k in ["discard", "trash", "dump", "throw"])
 
-
-    print (f"s: {source}, t: {target}, cs: {found_cards}, cn: {found_count}")
-    print(f"draw: {is_draw}, play: {is_play}, give: {is_give}, steal: {is_steal}, discard: {is_discard_action}")
+    debug (f"s: {source}, t: {target}, cs: {found_cards}, cn: {found_count}")
+    debug(f"draw: {is_draw}, play: {is_play}, give: {is_give}, steal: {is_steal}, discard: {is_discard_action}")
     # If we got too many verbs this is nonsense/ non-parseable
     if [is_draw, is_steal, is_play, is_give, is_discard_action].count(True) > 1:
         return None
@@ -336,7 +337,7 @@ def interpret_input(text: str, player_idx: int) -> Optional[Action]:
             # Default fallback is a Draw action
             source = source or (DISCARD if is_discard else STACK) #sound not default like this
 
-    print (f"s: {source}, t: {target}, cs: {found_cards}, cn: {found_count}")
+    debug (f"s: {source}, t: {target}, cs: {found_cards}, cn: {found_count}")
     # Final check: If we still don't have a source/target, the command was too vague
     # For actions where we are taking a specific card where the card is doesn't have 
     # to be specified it's infered from the table.

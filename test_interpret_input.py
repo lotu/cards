@@ -1,6 +1,5 @@
 import pytest
 from gameserver import  interpret_input
-from cards import Table
 from enums import *
 
 # --- Test Parsing of Complex Interactions ---

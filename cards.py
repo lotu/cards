@@ -1,4 +1,5 @@
 import random
+from logging import *
 from typing import Iterable, List
 
 from enums import *
@@ -37,7 +38,7 @@ class CardSet:
 
     # ------- Add / Remove Cards ------
 
-    def add(self, *cards):
+    def add(self, *cards) -> Iterable[Card]:
         """
         Adds cards to the CardSet.
         Can be called like:
@@ -153,10 +154,13 @@ class CardSet:
     def __repr__(self):
         return f"CardSet({self.format('short')})"
 
+    def __eq__(self, other):
+        return isinstance(other, CardSet) and self.cards == other.cards
+
     # Might add latter
     # is_empty --- not deck also works
     # peek() --- deck[0] already works
-    ##
+    #
 
 class Seat:
 
@@ -164,6 +168,10 @@ class Seat:
         self.name = str(name)
         self.hand = CardSet()
         self.tableau = CardSet()
+
+    def __eq__(self, other):
+        "Names don't matter for equality ????"
+        return isinstance(other,Seat) and self.hand == other.hand and self.tableau == other.tableau
 
 class Table:
 
@@ -176,8 +184,17 @@ class Table:
     def __str__(self) -> str:
         return table_to_str(self)
 
+    def __eq__(self, other) -> bool:
+        return isinstance(other, Table) and self.deck == other.deck \
+                                        and self.stack == other.stack \
+                                        and self.discard == other.discard \
+                                        and self.seats == other.seats
+
+
     def _get_cardset(self, location: Location):
         """Resolves a Location enum to a physical CardSet instance on the table."""
+        if location is None:
+            return None
         if location == Location.STACK:
             return self.stack
         if location == Location.DISCARD:
@@ -196,11 +213,17 @@ class Table:
         """Performs the physical movement of cards defined by the Action."""
         source = self._get_cardset(action.source)
         target = self._get_cardset(action.target)
-
         # Case 1: Moving a specific named card (e.g., from Discard)
         if action.cards:
+            if source is None:
+                loc = locate_cards(self, action.cards)
+                if loc is None:
+                    return False
+                source = self._get_cardset(loc)
+            debug(f"source: {source}")
+            debug(f"target: {target}")
             cards = target.add(source.pick(action.cards))
-            return cards
+            return len(cards) != 0
 
         # Case 2: Moving a quantity of cards (e.g., Drawing from Stack)
         else:
