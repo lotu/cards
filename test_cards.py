@@ -157,6 +157,114 @@ def test_draw_with_card_raises():
     with pytest.raises(ValueError):
         cs.draw(ACE_OF_SPADES)
 
+# ---------- Pick ----------
+
+def test_pick_single_card_variadic():
+    """Verify picking a single card as a positional argument."""
+    cs = CardSet([ACE_OF_SPADES, KING_OF_SPADES])
+    # pick() removes the card from the internal list
+    picked = cs.pick(ACE_OF_SPADES)
+    
+    assert picked == [ACE_OF_SPADES]
+    assert len(cs) == 1
+    assert ACE_OF_SPADES not in cs.cards
+
+def test_pick_multiple_cards_variadic():
+    """Verify picking multiple cards as positional arguments."""
+    cs = CardSet([ACE_OF_SPADES, KING_OF_SPADES, QUEEN_OF_SPADES])
+    picked = cs.pick(ACE_OF_SPADES, QUEEN_OF_SPADES)
+    
+    assert picked == [ACE_OF_SPADES, QUEEN_OF_SPADES]
+    assert len(cs) == 1
+    assert KING_OF_SPADES in cs.cards
+
+def test_pick_multiple_cards_iterable():
+    """Verify picking cards passed as a single list or iterable."""
+    cs = CardSet([ACE_OF_SPADES, KING_OF_SPADES, QUEEN_OF_SPADES])
+    # The method detects the single iterable argument
+    picked = cs.pick([KING_OF_SPADES, QUEEN_OF_SPADES])
+    
+    assert picked == [KING_OF_SPADES, QUEEN_OF_SPADES]
+    assert len(cs) == 1
+
+def test_pick_missing_card():
+    """Verify that picking a card not in the set returns an empty list without error."""
+    cs = CardSet([ACE_OF_SPADES])
+    # ValueError is caught internally if the card is missing
+    picked = cs.pick(KING_OF_SPADES)
+    
+    assert picked == []
+    assert len(cs) == 1
+
+def test_pick_partial_existence():
+    """Verify behavior when picking a mix of existing and non-existing cards."""
+    cs = CardSet([ACE_OF_SPADES, KING_OF_SPADES])
+    picked = cs.pick(ACE_OF_SPADES, ACE_OF_CLUBS)
+    
+    assert picked == [ACE_OF_SPADES]
+    assert len(cs) == 1
+
+def test_pick_duplicate_request():
+    """Verify picking the same card twice when only one instance exists."""
+    cs = CardSet([ACE_OF_SPADES])
+    # Once the first ACE is popped, the second index search fails gracefully
+    picked = cs.pick(ACE_OF_SPADES, ACE_OF_SPADES)
+    
+    assert picked == [ACE_OF_SPADES]
+    assert len(cs) == 0
+
+def test_pick_invalid_type_raises():
+    """Verify that passing non-Card objects raises a TypeError."""
+    cs = CardSet([ACE_OF_SPADES])
+    with pytest.raises(TypeError, match="Expected Card"):
+        cs.pick("Not A Card")
+
+# ---------- Pull ----------
+
+def test_pull_single_card_random():
+    """Verify pulling a single card (n=None) removes it and returns a Card."""
+    cs = CardSet([ACE_OF_SPADES, KING_OF_SPADES, QUEEN_OF_SPADES])
+    original_count = len(cs)
+    
+    pulled = cs.pull()
+    
+    assert isinstance(pulled, Card)
+    assert len(cs) == original_count - 1
+    assert pulled not in cs.cards
+
+def test_pull_multiple_cards():
+    """Verify pulling n cards returns a list and reduces the set size."""
+    cs = CardSet([ACE_OF_SPADES, KING_OF_SPADES, QUEEN_OF_SPADES, JACK_OF_SPADES])
+    n = 2
+    original_count = len(cs)
+    
+    pulled = cs.pull(n)
+    
+    assert isinstance(pulled, list)
+    assert len(pulled) == n
+    assert len(cs) == original_count - n
+    for card in pulled:
+        assert card not in cs.cards
+
+def test_pull_from_empty_raises():
+    """Should raise IndexError when pulling from an empty set."""
+    cs = CardSet()
+    with pytest.raises(IndexError, match="Empty of cards"):
+        cs.pull()
+
+def test_pull_too_many_raises():
+    """Should raise IndexError if n is greater than the set size."""
+    cs = CardSet([ACE_OF_SPADES, KING_OF_SPADES])
+    with pytest.raises(IndexError, match="Not enough cards to pull"):
+        cs.pull(3)
+
+def test_pull_zero_cards():
+    """Verify that pulling 0 cards returns an empty list and changes nothing."""
+    cs = CardSet([ACE_OF_SPADES, KING_OF_SPADES])
+    pulled = cs.pull(0)
+    
+    assert pulled == []
+    assert len(cs) == 2
 
 # ---------- Slicing ----------
 

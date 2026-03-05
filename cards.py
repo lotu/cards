@@ -108,6 +108,22 @@ class CardSet:
 
         return picked
 
+    def pull(self, n: int = None):
+        """
+        Remove & Return n random cards.
+        Doesn't disturm order.
+        """
+        if n is None:
+            if len(self.cards) > 0:
+                return self.cards.pop(random.randrange(len(self.cards)))
+            else:
+                raise IndexError("Empty of cards")
+        if len(self.cards) < n:
+            raise IndexError("Not enough cards to pull.")
+        pulled = []
+        for i in range(n):
+                pulled.append(self.cards.pop(random.randrange(len(self.cards))))
+        return pulled
 
     # -------- Length ----------
 
