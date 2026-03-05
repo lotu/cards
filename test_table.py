@@ -1,12 +1,129 @@
 import pytest
 from unittest.mock import MagicMock, patch
 from enums import *
-from cards import CardSet, Table
+from cards import *
 
 @pytest.fixture
 def table():
     """Provides a clean Table for testing."""
     return Table(seats=2, empty=True)
+
+# --------------- Locate Card -------------
+def test_location_has_cards_basic():
+    """Verify checking for cards in specific locations."""
+    table = Table(empty=True)
+    table.seats[0].hand.add(ACE_OF_SPADES, KING_OF_SPADES)
+    table.stack.add(TWO_OF_CLUBS)
+    
+    # Check single card
+    assert location_has_cards(table, P1_HAND, ACE_OF_SPADES) is True
+    assert location_has_cards(table, P1_HAND, ACE_OF_CLUBS) is False
+    
+    # Check multiple cards
+    assert location_has_cards(table, P1_HAND, [ACE_OF_SPADES, KING_OF_SPADES]) is True
+    
+    # Check central piles
+    assert location_has_cards(table, STACK, TWO_OF_CLUBS) is True
+
+def test_location_has_cards_quantities():
+    """Verify that the check respects card quantities (multiset logic)."""
+    table = Table(empty=True)
+    table.discard.add(ACE_OF_SPADES)
+    
+    # Should be False because there is only one Ace of Spades in the pile
+    assert location_has_cards(table, DISCARD, [ACE_OF_SPADES, ACE_OF_SPADES]) is False
+
+def test_locate_card_success():
+    """Verify that a card can be found anywhere on the table."""
+    table = Table(empty=True)
+    table.seats[2].tableau.add(QUEEN_OF_HEARTS) # P3 Tableau
+    table.discard.add(JACK_OF_DIAMONDS)
+    
+    assert locate_card(table, QUEEN_OF_HEARTS) == P3_TABLEAU
+    assert locate_card(table, JACK_OF_DIAMONDS) == DISCARD
+
+def test_locate_card_missing_and_invalid():
+    """Verify behavior when a card is not present or input is invalid."""
+    table = Table(empty=True)
+    
+    # Not on table
+    assert locate_card(table, ACE_OF_CLUBS) is None
+    
+    # Invalid type
+    with pytest.raises(TypeError):
+        locate_card(table, "Ace of Spades") # type: ignore
+
+# ---------- Locate Cards (Plural) ----------
+
+def test_locate_cards_success():
+    """Verify finding a group of cards in a single location."""
+    table = Table(empty=True)
+    my_cards = [ACE_OF_SPADES, KING_OF_SPADES, QUEEN_OF_SPADES]
+    table.seats[0].hand.add(my_cards)
+
+    assert locate_cards(table, my_cards) == P1_HAND
+
+def test_locate_cards_fails_when_split():
+    """Verify that it returns None if cards are spread across different locations."""
+    table = Table(empty=True)
+    table.seats[0].hand.add(ACE_OF_SPADES)
+    table.seats[1].hand.add(KING_OF_SPADES)
+
+    # Even though both cards exist on the table, they aren't in ONE location
+    assert locate_cards(table, [ACE_OF_SPADES, KING_OF_SPADES]) is None
+
+def test_locate_cards_fails_when_missing_one():
+    """Verify failure if even one card in the set is missing from the location."""
+    table = Table(empty=True)
+    table.seats[0].hand.add(ACE_OF_SPADES)
+
+    assert locate_cards(table, [ACE_OF_SPADES, KING_OF_SPADES]) is None
+
+def test_locate_cards_ambiguity_failure():
+    """Verify failure if the set of cards could be found in multiple locations."""
+    table = Table(empty=True)
+    # Put an Ace of Spades in two different places
+    table.seats[0].hand.add(ACE_OF_SPADES)
+    table.seats[1].hand.add(ACE_OF_SPADES)
+
+    # It shouldn't guess which one you want
+    assert locate_cards(table, [ACE_OF_SPADES]) is None
+
+def test_locate_cards_respects_quantity():
+    """Verify it fails if the location has the card, but not enough of them."""
+    table = Table(empty=True)
+    table.seats[0].hand.add(ACE_OF_SPADES)
+
+    # Asking for two, but only one is there
+    assert locate_cards(table, [ACE_OF_SPADES, ACE_OF_SPADES]) is None
+
+def test_locate_cards_respects_quantity_succuss():
+    """Verify it fails if the location has the card, but not enough of them."""
+    table = Table(empty=True)
+    table.seats[0].hand.add(ACE_OF_SPADES, KING_OF_DIAMONDS, ACE_OF_SPADES)
+
+    # Asking for two, but only one is there
+    assert locate_cards(table, [ACE_OF_SPADES, ACE_OF_SPADES]) == P1_HAND
+
+# --------- Seat Sees Cards ---------------
+def test_seat_sees_cards_visibility_rules():
+    """Verify strict visibility rules for players."""
+    t = Table(empty=True)
+    t.seats[0].hand.add(ACE_OF_SPADES)    # P1 Hand
+    t.seats[1].hand.add(KING_OF_SPADES)   # P2 Hand
+    t.seats[1].tableau.add(QUEEN_OF_HEARTS) # P2 Tableau
+    t.discard.add(JACK_OF_DIAMONDS)      # Discard
+    t.stack.add(TWO_OF_CLUBS)            # Stack
+
+    # Player 1 (seat_index 0)
+    assert seat_sees_cards(t, 0, [ACE_OF_SPADES]) is True    # Own hand
+    assert seat_sees_cards(t, 0, [QUEEN_OF_HEARTS]) is True  # Opponent Tableau
+    assert seat_sees_cards(t, 0, [JACK_OF_DIAMONDS]) is True # Discard
+
+    assert seat_sees_cards(t, 0, [KING_OF_SPADES]) is False  # Opponent Hand
+    assert seat_sees_cards(t, 0, [TWO_OF_CLUBS]) is False    # Stack
+
+# --------- Execute Action ----------------
 
 @pytest.mark.parametrize("action, setup_cards, expected_source_len, expected_target_len", [
     # Scenario 1: Player 1 plays a card from hand to their own tableau

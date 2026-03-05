@@ -174,7 +174,7 @@ class Table:
         self.seats = [Seat(n) for n in range(seats)]
 
     def __str__(self) -> str:
-        return ''
+        return table_to_str(self)
 
     def _get_cardset(self, location: Location):
         """Resolves a Location enum to a physical CardSet instance on the table."""
@@ -213,6 +213,98 @@ class Table:
 
         return True
    ##
+
+def seat_sees_cards(table: Table, seat_index: int, cards: Iterable[Card]) -> bool:
+    """
+    Returns True if the player at seat_index can see all the specified cards.
+    A player sees:
+    1. Their own hand.
+    2. Any player's tableau.
+    3. The discard pile.
+    
+    Returns False if cards are in multiple locations, or in a hidden location 
+    (like the stack or an opponent's hand).
+    """
+    loc = locate_cards(table, cards)
+    
+    # If cards aren't in a single valid location, they can't be 'seen' as a set
+    if loc is None:
+        return False
+        
+    # 1. Can see the Discard pile
+    if loc == Location.DISCARD:
+        return True
+        
+    # 2. Check player-specific locations
+    if not loc.shared:
+        # Can see any Tableau
+        if loc.seat_part == SeatPart.TABLEAU:
+            return True
+        
+        # Can see their own Hand (seat_index 0 maps to Player 1)
+        if loc.seat_part == SeatPart.HAND and loc.player == (seat_index + 1):
+            return True
+            
+    # Everything else (Stack, other players' hands) is hidden
+    return False
+
+def locate_cards(table: Table, cards: Iterable[Card]) -> Optional[Location]:
+    """
+    Finds the single Location that contains all the specified cards.
+    Returns the Location if a unique one is found; returns None if the cards
+    are split across multiple locations, not found at all, or if the request
+    is ambiguous (exists in multiple places).
+    """
+    if not cards:
+        return None
+
+    matches = []
+    for loc in Location:
+        if location_has_cards(table, loc, cards):
+            matches.append(loc)
+
+    # Success only if exactly one location can satisfy the full set of cards
+    if len(matches) == 1:
+        return matches[0]
+
+    return None
+
+def location_has_cards(table: Table, location: Location, cards: Card | Iterable[Card]) -> bool:
+    """
+    Checks if a specific Location on the table contains the specified card(s).
+    Supports a single Card instance or an iterable of Cards.
+    """
+    target_set = table._get_cardset(location)
+
+    # Simple check for a single card
+    if isinstance(cards, Card):
+        return cards in target_set.cards
+
+    # Multiset check for multiple cards (ensures duplicates are handled correctly)
+    check_list = list(cards)
+    available_list = list(target_set.cards)
+    for c in check_list:
+        if c in available_list:
+            available_list.remove(c)
+        else:
+            return False
+    return True
+
+def locate_card(table: Table, card: Card) -> Optional[Location]:
+    """
+    Searches all possible locations on the table to find where a specific card is.
+    Returns the Location enum member if found, otherwise None.
+    """
+    if not isinstance(card, Card):
+        raise TypeError(f"Expected Card, got {type(card)}")
+
+    for loc in Location:
+        # We check the internal list directly for speed
+        if card in table._get_cardset(loc).cards:
+            return loc
+    return None
+
+## 
 
 def table_to_str(t):
     grid = init_grid(45,30)
