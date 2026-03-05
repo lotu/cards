@@ -38,21 +38,26 @@ _SUIT_ALIASES = {
     "CLUB":     CLUBS,
     "CLUBS":    CLUBS,
     "♣":        CLUBS,
+    "♧":        CLUBS,
 
     "D":        DIAMONDS,
     "DIAMOND":  DIAMONDS,
     "DIAMONDS": DIAMONDS,
     "♦":        DIAMONDS,
+    "♢":        DIAMONDS,
 
     "H":        HEARTS,
     "HEART":    HEARTS,
     "HEARTS":   HEARTS,
     "♥":        HEARTS,
+    "❤":        HEARTS,
+    "♡":        HEARTS,
 
     "S":        SPADES,
     "SPADE":    SPADES,
     "SPADES":   SPADES,
     "♠":        SPADES,
+    "♤":        SPADES,
 }
 
 
@@ -74,11 +79,11 @@ def parse_card(text: str) -> Card:
 
     # Turn all seperators _, \, -, of into spaces
     s = re.sub(r"[_\-]", " ", s)
-    s = re.sub(r"(?=[♣♦♥♠])|(?<=[♣♦♥♠])", " ", s)
+    s = re.sub(r"(?=[♣♧♦♢♡♥❤♠♤])|(?<=[♣♧♦♢♡♥❤♠♤])", " ", s)
     s = re.sub(r"\s*OF\s*", " ", s)  # Safe because none of the tokens contain 'of'
 
     # Match Short formats (e.g. Q♠, 10D, TS) 
-    short_match = re.fullmatch(r"(10|[2-9AJQKT])\s*([CDHS♣♦♥♠])", s)
+    short_match = re.fullmatch(r"(10|[2-9AJQKT])\s*([CDHS♣♧♦♢♡♥❤♠♤])", s)
     if short_match:
         rank_text, suit_text = short_match.groups()
         rank = _RANK_ALIASES[rank_text]
@@ -100,7 +105,7 @@ def parse_card(text: str) -> Card:
 
 def parse_card_set(text: str) -> list[Card]:
     # Split on non Word (alpha numeraci)  characters except the suits
-    words = re.split(r'''[^\w♠♦♣♥]+''', text)
+    words = re.split(r'''[^\w♣♧♦♢♡♥❤♠♤]+''', text)
     i = 0
     cards = []
 

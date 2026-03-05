@@ -23,10 +23,10 @@ def test_card_names():
     assert c.short_name() == "T♣"
     c = ACE_OF_DIAMONDS
     assert c.long_name() == "Ace of Diamonds"
-    assert c.short_name() == "A♦"
+    assert c.short_name() == "A♢"
     c = FOUR_OF_HEARTS
     assert c.long_name() == "Four of Hearts"
-    assert c.short_name() == "4♥"
+    assert c.short_name() == "4♡"
 
 
 def test_card_ordering():

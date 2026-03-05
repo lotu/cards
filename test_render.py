@@ -41,12 +41,12 @@ def init_table(): # Same table as from test draw methods
     assert t.stack[0] == ACE_OF_SPADES
 
     assert TEN_OF_CLUBS in t.seats[0].hand
-    assert not TEN_OF_CLUBS in t.discard
+    assert TEN_OF_CLUBS not in t.discard
 
     t.discard.add(t.seats[0].hand.pick(TEN_OF_CLUBS))
 
     assert t.seats[0].hand.size == 12
-    assert not TEN_OF_CLUBS in t.seats[0].hand
+    assert TEN_OF_CLUBS not in t.seats[0].hand
     assert TEN_OF_CLUBS in t.discard
 
     t.seats[1].tableau.add(t.seats[1].hand.pick([  ACE_OF_DIAMONDS
@@ -65,7 +65,7 @@ def test_hand_lines():
     assert grid == []
 
     grid = hand_lines(t.seats[3].hand)
-    assert grid == ['A♥ 2♥ 3♥ 4♥',  '5♥ 6♥ 7♥ 8♥', '9♥ T♥ J♥ Q♥', 'K♥']
+    assert grid == ['A♡ 2♡ 3♡ 4♡',  '5♡ 6♡ 7♡ 8♡', '9♡ T♡ J♡ Q♡', 'K♡']
 
 
 def test_pad_grid():
@@ -77,7 +77,7 @@ def test_pad_grid():
     assert grid == []
 
     grid = pad_grid(hand_lines(t.seats[3].hand))
-    assert grid == ['A♥ 2♥ 3♥ 4♥',  '5♥ 6♥ 7♥ 8♥', '9♥ T♥ J♥ Q♥', 'K♥         ']
+    assert grid == ['A♡ 2♡ 3♡ 4♡',  '5♡ 6♡ 7♡ 8♡', '9♡ T♡ J♡ Q♡', 'K♡         ']
 
 def test_seat_to_grid():
     t = init_table()
