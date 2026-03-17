@@ -1,12 +1,32 @@
 import asyncio
 import os
 import re
+from google import genai
 from logging import debug
 from cards import Table, table_to_str, describe_table
 from enums import *
 from parse import *
 
+# Abstract Player Class
 class Player:
+    def __init__(self, player_id):
+        self.id = player_id
+        self.name = f"Player {self.id}"
+        self.last_input = ""
+
+    def connect(self):
+        """Initialize any necessary connections (pipes, API clients, etc)."""
+        pass
+
+    def send_message(self, message):
+        """Send game state or text to the player."""
+        raise NotImplementedError
+
+    async def wait_for_input(self):
+        """Wait for the player to provide a command string."""
+        raise NotImplementedError
+
+class FIFOPlayer:
     def __init__(self, player_id, fifo_dir):
         self.id = player_id
         self.name = f"Player {self.id}"
@@ -67,6 +87,81 @@ class Player:
             # Sleep a tiny bit to prevent 100% CPU usage while polling
             await asyncio.sleep(0.1)
 
+class LLMPlayer(Player):
+    def __init__(self, player_id, fifo_dir, api_key=None, model_id="gemini-2.0-flash"):
+        super().__init__(player_id)
+        # Gemini setup
+        self.client = genai.Client(api_key=api_key)
+        self.model_id = model_id
+        self.chat_session = None
+        self.pending_message = ""
+
+        # Mirroring setup (using your FIFO structure)
+        self.out_path = os.path.join(fifo_dir, f"p{self.id}_out")
+        self.fd_out = None
+
+    def connect(self):
+        # 1. Initialize Gemini
+        instructions = (
+            f"You are {self.name} playing a text-based card game. "
+            "Respond brieflly with comands in the form of text.  You will have to "
+            "respond every 'turn' as the gameserver does not enforce any rules (much like "
+            "a pyscial table doesn't enforce the rules of a card game "
+            "We are currentlly developing this system every turn please respond with an "
+            "action described as text, please try diffrent things out."
+ 
+        )
+        self.chat_session = self.client.aio.chats.create(
+            model=self.model_id,
+            config={'system_instruction': instructions}
+        )
+
+        # 2. Open the output FIFO for mirroring
+        # We use Non-blocking so the server doesn't hang if no one is listening
+        try:
+            self.fd_out = os.open(self.out_path, os.O_WRONLY | os.O_NONBLOCK)
+            print(f"-> {self.name} mirroring to {self.out_path}")
+        except OSError:
+            print(f"-> {self.name} could not open mirror pipe (no listener).")
+
+    def _write_to_mirror(self, text):
+        """Helper to push text to the FIFO if open."""
+        if self.fd_out is not None:
+            try:
+                os.write(self.fd_out, text.encode())
+            except OSError:
+                # Listener likely disconnected
+                pass
+
+    def send_message(self, message):
+        """Messages from the server (Table state, game logs)."""
+        # Mirror the incoming server message so we see what the LLM sees
+        self._write_to_mirror(f"\n[SERVER -> LLM]:\n{message}\n")
+
+        # Buffer for the actual API call
+        self.pending_message += message + "\n"
+
+    async def wait_for_input(self):
+        if not self.pending_message:
+            return ""
+
+        prompt = self.pending_message
+        self.pending_message = ""
+
+        try:
+            # Call the LLM
+            response = await self.chat_session.send_message(prompt)
+            self.last_input = response.text.strip()
+
+            # Mirror the LLM's response to the FIFO
+            self._write_to_mirror(f"\n[LLM -> SERVER]: {self.last_input}\n")
+
+            return self.last_input
+        except Exception as e:
+            error_msg = f"!! LLM Error: {e}"
+            self._write_to_mirror(f"\n{error_msg}\n")
+            return "pass"
+
 class GameServer:
     def __init__(self, player_count=4, fifo_dir="fifo"):
         # UI Control Booleans
@@ -75,6 +170,12 @@ class GameServer:
 
         self.fifo_dir = fifo_dir
         self.players = [Player(i, fifo_dir) for i in range(1, player_count + 1)]
+        self.players = [
+            FIFOPlayer(1, fifo_dir),
+            LLMPlayer(2), # Uses environment variable for API key
+            FIFOPlayer(3, fifo_dir),
+            LLMPlayer(4)
+        ]
         self.turn_number = 1
         
         # 1. Create the Table

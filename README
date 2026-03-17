@@ -16,3 +16,7 @@ Run ./make_fifo.sh
 run ./open_pipes.sh once
 cat > p1_in
 cat p1_out
+
+You must also set the GEMIN API KEY via
+export GEMINI_API_KEY=""
+DO NOT COMMIT THE ACTUAL KEY INTO THE REPOSITORY
