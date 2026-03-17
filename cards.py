@@ -337,9 +337,9 @@ def table_to_str(t):
     replace_subgrid(grid,seat_to_grid(t.seats[2]),15, 0)
     replace_subgrid(grid,seat_to_grid(t.seats[3]),35,10)
 
-    replace_subgrid(grid,card_grid(str(len(t.stack))), 20, 13)
+    replace_subgrid(grid,card_grid(str(len(t.stack))), 20, 12)
     replace_subgrid(grid,card_grid(
-        t.discard[-1] if len(t.discard) > 0 else ''), 20, 18)
+        t.discard[-1] if len(t.discard) > 0 else ''), 20, 16)
 
     return grid_to_str(grid)
 
