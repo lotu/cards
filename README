@@ -1,0 +1,12 @@
+
+# Setup
+
+Install pyenv and pyenv-virtualenv with brew.  Setup a cards env and set the local pyenv to it in the root dir.
+must init pyenv with pyenv init (gives instructions to add to shell)
+
+Install pipenv to install packages to this env 
+
+installed ipython
+
+Run ./make_fifo.sh
+run ./open_pipes.sh once
