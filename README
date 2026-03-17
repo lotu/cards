@@ -4,9 +4,15 @@
 Install pyenv and pyenv-virtualenv with brew.  Setup a cards env and set the local pyenv to it in the root dir.
 must init pyenv with pyenv init (gives instructions to add to shell)
 
+
 Install pipenv to install packages to this env 
 
+Now you must run pyenv activate in every new shell still.
+
 installed ipython
+pip install pytest pytest-watch pytest-asyncio
 
 Run ./make_fifo.sh
 run ./open_pipes.sh once
+cat > p1_in
+cat p1_out
