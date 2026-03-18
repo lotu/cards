@@ -38,7 +38,7 @@ def setup_fifos():
 async def test_player_input_capture(setup_fifos):
     """Test that wait_for_input only returns when a newline is sent."""
     count, folder = setup_fifos
-    player = Player(1, folder)
+    player = FIFOPlayer(1, folder)
     player.connect()
     
     # Wrap wait_for_input in a task
@@ -64,7 +64,7 @@ async def test_player_input_capture(setup_fifos):
 async def test_server_waits_for_all(setup_fifos):
     """Verify server doesn't advance turn until the LAST player speaks."""
     count, folder = setup_fifos
-    server = GameServer(player_count=count, fifo_dir=folder)
+    server = GameServer(player_count=count, fifo_dir=folder, test=True)
     for p in server.players:
         p.connect()
 
@@ -92,7 +92,7 @@ async def test_server_waits_for_all(setup_fifos):
 async def test_broadcast_turn(setup_fifos):
     """Verify data written by the server is readable from the out pipe."""
     count, folder = setup_fifos
-    server = GameServer(player_count=count, fifo_dir=folder)
+    server = GameServer(player_count=count, fifo_dir=folder, test=True)
     for p in server.players:
         p.connect()
         

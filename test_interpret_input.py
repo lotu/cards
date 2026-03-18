@@ -36,6 +36,7 @@ from enums import *
     ("draw 3", 0, STACK, P1_HAND, None, 3),
     ("draw 5 cards", 1, STACK, P2_HAND, None, 5),
 
+    ("discard", 1, P2_HAND, DISCARD, None, 1),
     ("discard 1", 0, P1_HAND, DISCARD, None, 1),
     ("dump KH, JD", 2, None, DISCARD, [KING_OF_HEARTS, JACK_OF_DIAMONDS], 2),
     ("trash TD from tableau", 0, P1_TABLEAU, DISCARD, [TEN_OF_DIAMONDS], 1),

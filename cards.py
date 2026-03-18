@@ -330,6 +330,26 @@ def locate_card(table: Table, card: Card) -> Optional[Location]:
 ## 
 
 def table_to_str(t):
+    if len(t.seats) == 4:
+        return table_to_str_4_seats(t)
+    if len(t.seats) == 2:
+        return table_to_str_2_seats(t)
+    assert False
+
+def table_to_str_2_seats(t):
+    grid = init_grid(45,30)
+
+    replace_subgrid(grid,seat_to_grid(t.seats[0]),15,20)
+    replace_subgrid(grid,seat_to_grid(t.seats[1]),15, 0)
+
+    replace_subgrid(grid,card_grid(str(len(t.stack))), 20, 12)
+    replace_subgrid(grid,card_grid(
+        t.discard[-1] if len(t.discard) > 0 else ''), 20, 16)
+
+    return grid_to_str(grid)
+
+
+def table_to_str_4_seats(t):
     grid = init_grid(45,30)
 
     replace_subgrid(grid,seat_to_grid(t.seats[0]),15,20)

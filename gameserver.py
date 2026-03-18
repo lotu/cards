@@ -26,7 +26,18 @@ class Player:
         """Wait for the player to provide a command string."""
         raise NotImplementedError
 
-class FIFOPlayer:
+    def send_action(self, player, action):
+        self.send_message(f"{player} {action}\n")
+
+    def send_turn(self, turn_number):
+        self.send_message(f"\n\n\n--- TURN {turn_number} ---\n")
+        
+    def send_table(self, t):
+        # self.send_message(f"{table_to_str(t)}\n")
+        self.send_message(f"{describe_table(t)}\n")
+
+
+class FIFOPlayer(Player):
     def __init__(self, player_id, fifo_dir):
         self.id = player_id
         self.name = f"Player {self.id}"
@@ -88,7 +99,7 @@ class FIFOPlayer:
             await asyncio.sleep(0.1)
 
 class LLMPlayer(Player):
-    def __init__(self, player_id, fifo_dir, api_key=None, model_id="gemini-2.0-flash"):
+    def __init__(self, player_id, fifo_dir, api_key=None, model_id="gemini-2.5-flash-lite"):
         super().__init__(player_id)
         # Gemini setup
         self.client = genai.Client(api_key=api_key)
@@ -104,7 +115,8 @@ class LLMPlayer(Player):
         # 1. Initialize Gemini
         instructions = (
             f"You are {self.name} playing a text-based card game. "
-            "Respond brieflly with comands in the form of text.  You will have to "
+            "Respond brieflly with comands in the form of text. Example commands are draw 2 cards "
+            "Discard ace of spades, play a card, or take 1 card from player 2. You will have to "
             "respond every 'turn' as the gameserver does not enforce any rules (much like "
             "a pyscial table doesn't enforce the rules of a card game "
             "We are currentlly developing this system every turn please respond with an "
@@ -162,24 +174,29 @@ class LLMPlayer(Player):
             self._write_to_mirror(f"\n{error_msg}\n")
             return "pass"
 
+## 
+
 class GameServer:
-    def __init__(self, player_count=4, fifo_dir="fifo"):
+    def __init__(self, player_count=4, fifo_dir="fifo", test=False):
         # UI Control Booleans
         self.show_text_desc = False
         self.show_grid_ui = True
 
         self.fifo_dir = fifo_dir
-        self.players = [Player(i, fifo_dir) for i in range(1, player_count + 1)]
-        self.players = [
-            FIFOPlayer(1, fifo_dir),
-            LLMPlayer(2), # Uses environment variable for API key
-            FIFOPlayer(3, fifo_dir),
-            LLMPlayer(4)
-        ]
+        if test:
+            self.players = [FIFOPlayer(i, fifo_dir) for i in range(1, player_count + 1)]
+        else:
+            self.players = [
+                FIFOPlayer(1, fifo_dir),
+                FIFOPlayer(2, fifo_dir),
+                #LLMPlayer(2, fifo_dir),
+                #LLMPlayer(3, fifo_dir),
+                #LLMPlayer(4, fifo_dir),
+            ]
         self.turn_number = 1
         
         # 1. Create the Table
-        self.table = Table(seats=player_count)
+        self.table = Table(seats=len(self.players))
         
         # Sync Table Seat names with Player names
         for i, player in enumerate(self.players):
@@ -200,24 +217,9 @@ class GameServer:
 
     async def broadcast_state(self):
         """Sends the board representation to all players."""
-        output_parts = []
-        
-        output_parts.append(f"\n\n\n--- TURN {self.turn_number} ---\n")
-        
-        # Send representations based on booleans
-        if self.show_text_desc:
-            output_parts.append(describe_table(self.table))
-            output_parts.append("\n")
-
-        if self.show_grid_ui:
-            output_parts.append(table_to_str(self.table))
-            output_parts.append("\n")
-
-        output_parts.append("\nPress [ENTER] in your input terminal to advance...")
-        full_payload = "".join(output_parts)
-
         for p in self.players:
-            p.send_message(full_payload)
+            p.send_turn(self.turn_number)
+            p.send_table(self.table)
 
     async def run_game(self):
         self.setup_game()
@@ -238,10 +240,13 @@ class GameServer:
                 for i, text in enumerate(inputs):
                     action = interpret_input(text, i)
                     if action:
-                        print(f"Player {i+1} wants to: {action}")
+                        print(f"Player {i+1} wants to {action}")
                         try:
                             # 4. Execute
-                            self.table.execute_action(action)
+                            if self.table.execute_action(action):
+                                for player in self.players:
+                                    player.send_action(f"Player {i+1}", action)
+
                         except ValueError as e:
                             self.players[i].send_message(f"Invalid move: {e}\n")
                 
@@ -249,68 +254,6 @@ class GameServer:
         except KeyboardInterrupt:
             print("\nShutting down.")
 
-
-def interpret_input_simple(text: str, player_idx: int, table) -> Optional[Action]:
-    """
-    Parses natural language into structured Actions, supporting player-to-player
-    and player-to-table interactions.
-    """
-    s = text.lower().strip()
-    if not s:
-        return None
-
-    # Constants for the acting player
-    my_seat_num = player_idx + 1
-    my_hand = Location.from_seat(my_seat_num, SeatPart.HAND)
-    my_tableau = Location.from_seat(my_seat_num, SeatPart.TABLEAU)
-
-    # 1. Identify if another player is mentioned (e.g., "p2")
-    player_match = re.search(r'p([1-4])', s)
-    other_seat_num = int(player_match.group(1)) if player_match else None
-
-    # Identify if 'tableau' or 'table' is mentioned
-    is_tableau = any(k in s for k in ["tableau", "table", "board"])
-    target_part = SeatPart.TABLEAU if is_tableau else SeatPart.HAND
-
-    # --- Case A: Playing a card to your own Tableau ("play Ace") ---
-    if "play" in s or ("put" in s and is_tableau and not other_seat_num):
-        try:
-            card = parse_card_set(s)
-            return Action(source=my_hand, target=my_tableau, cards=card)
-        except ValueError:
-            pass
-
-    # --- Case B: Taking/Stealing from another player ("take from p2") ---
-    if any(k in s for k in ["take", "steal", "grab", "get"]) and other_seat_num:
-        source_loc = Location.from_seat(other_seat_num, target_part)
-        return Action(source=source_loc, target=my_hand, count=1)
-
-    # --- Case C: Giving to another player ("give Ace to p2") ---
-    if any(k in s for k in ["give", "pass", "put"]) and other_seat_num:
-        target_loc = Location.from_seat(other_seat_num, target_part)
-        try:
-            card = parse_card_set(s)
-            return Action(source=my_hand, target=target_loc, cards=card)
-        except ValueError:
-            return Action(source=my_hand, target=target_loc, count=1)
-
-    # --- Case D: Existing Draw Logic (Stack / Discard) ---
-    if any(k in s for k in ["draw", "take", "get", "grab", "hit"]):
-        count_match = re.search(r'\d+', s)
-        count = int(count_match.group()) if count_match else 1
-        source = DISCARD if ("discard" in s or "pile" in s) else STACK
-        return Action(source=source, target=my_hand, count=count)
-
-    # --- Case E: Picking specific card from Discard ---
-    if len(table.discard.cards) > 0:
-        try:
-            card = parse_card(s)
-            if card == table.discard.cards[-1]:
-                return Action(source=DISCARD, target=my_hand, cards=card)
-        except ValueError:
-            pass
-
-    return None
 
 def interpret_input(text: str, player_idx: int) -> Optional[Action]:
     s = text.lower().strip()
