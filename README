@@ -17,6 +17,10 @@ run ./open_pipes.sh once
 cat > p1_in
 cat p1_out
 
+then use setup_tmux.sh to open a tmux session with the right windows
+
 You must also set the GEMIN API KEY via
 export GEMINI_API_KEY=""
 DO NOT COMMIT THE ACTUAL KEY INTO THE REPOSITORY
+
+source set_llm_env.sh
