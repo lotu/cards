@@ -1,13 +1,13 @@
 import pytest
-from enums import Location, SeatPart, Action, Card, Rank, Suit
+from enums import *
 
 # --- Tests for Location ---
 
 def test_location_from_seat():
     # Valid cases
-    assert Location.from_seat(1, SeatPart.HAND) == Location.P1_HAND
-    assert Location.from_seat(1, SeatPart.TABLEAU) == Location.P1_TABLEAU
-    assert Location.from_seat(4, SeatPart.TABLEAU) == Location.P4_TABLEAU
+    assert Location.from_seat(1, SeatPart.HAND) == P1_HAND
+    assert Location.from_seat(1, SeatPart.TABLEAU) == P1_TABLEAU
+    assert Location.from_seat(4, SeatPart.TABLEAU) == P4_TABLEAU
     
     # Invalid cases
     with pytest.raises(ValueError):
@@ -17,34 +17,70 @@ def test_location_from_seat():
 
 def test_location_properties():
     # Test shared status
-    assert Location.P1_HAND.shared is False
-    assert Location.P4_TABLEAU.shared is False
-    assert Location.STACK.shared is True
-    assert Location.DISCARD.shared is True
+    assert P1_HAND.shared is False
+    assert P4_TABLEAU.shared is False
+    assert STACK.shared is True
+    assert DISCARD.shared is True
 
     # Test player identification
-    assert Location.P1_HAND.player == 1
-    assert Location.P4_TABLEAU.player == 4
-    assert Location.STACK.player is None
+    assert P1_HAND.player == 1
+    assert P4_TABLEAU.player == 4
+    assert STACK.player is None
 
     # Test seat_part identification
-    assert Location.P1_HAND.seat_part == SeatPart.HAND
-    assert Location.P2_TABLEAU.seat_part == SeatPart.TABLEAU
-    assert Location.STACK.seat_part is None
+    assert P1_HAND.seat_part == SeatPart.HAND
+    assert P2_TABLEAU.seat_part == SeatPart.TABLEAU
+    assert STACK.seat_part is None
 
 # --- Tests for Action ---
 
 def test_action_creation():
-    action = Action(source=Location.P1_HAND, target=Location.STACK, count=2)
-    assert action.source == Location.P1_HAND
-    assert action.target == Location.STACK
+    action = Action(source=P1_HAND, target=STACK, count=2)
+    assert action.source == P1_HAND
+    assert action.target == STACK
     assert action.count == 2
     assert action.cards is None
 
 def test_action_repr():
     # Ensure the string representation looks correct
-    action = Action(source=Location.P1_HAND, target=Location.STACK)
+    action = Action(source=P1_HAND, target=STACK)
     # Check that the string contains expected info
     rep = repr(action)
     assert "source=P1_HAND" in rep
     assert "target=STACK" in rep
+
+@pytest.mark.parametrize("source, target, count, cards, expected_snippet", [
+    # Basic Drawing
+    (STACK, P1_HAND, 1, None, "draws 1 card from the stack to Player 1's hand"),
+    
+    # Drawing multiple
+    (STACK, P1_HAND, 3, None, "draws 3 cards from the stack to Player 1's hand"),
+    
+    # Discarding a specific card
+    (P2_HAND, DISCARD, 1, ACE_OF_SPADES, "discards A♠ from Player 2's hand to the discard"),
+    
+    # Moving within own area (Hand to Tableau)
+    (P3_HAND, P3_TABLEAU, 1, None, "moves 1 card from Player 3's hand to Player 3's tableau"),
+
+    # Moving within own area (Hand to Tableau)
+    (None, P3_TABLEAU, 1, TWO_OF_SPADES, "moves 2♠ from anywhere to Player 3's tableau"),
+    (P2_HAND, None, 1, None, "moves 1 card from Player 2's hand to unknown"),
+
+    (STACK, DISCARD, 1, None, "draws 1 card from the stack to the discard"), # XXX
+    
+    # Playing to someone else's tableau
+    (P1_HAND, P2_TABLEAU, 1, TEN_OF_DIAMONDS, "moves T♢ from Player 1's hand to Player 2's tableau"),
+    
+    (P2_HAND, DISCARD, 1, None, "discards 1 card from Player 2's hand to the discard"),
+    # Handling a list of cards
+    (P4_HAND, DISCARD, 2, [TWO_OF_CLUBS, THREE_OF_CLUBS], 
+     "discards 2♣, 3♣ from Player 4's hand to the discard"),
+])
+def test_action_descriptions(source, target, count, cards, expected_snippet):
+    """Verifies that Action.describe() produces the correct natural language string."""
+    action = Action(source=source, target=target, count=count, cards=cards)
+    
+    result = action.__str__()
+    
+    # We check if the expected string is exactly the result
+    assert result == expected_snippet

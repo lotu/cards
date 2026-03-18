@@ -192,7 +192,16 @@ class Location(IntEnum):
         return  SeatPart((self.value - 1) % 2) if not self.shared else None
 
     def __str__(self) -> str:
-        return self.name.title()
+        # 2. Format the Source and Target strings
+        if self.shared:
+            # Handles STACK, DISCARD, etc.
+            name = self.name.lower()
+            return f"the {name}"
+        else:
+            # Handles P1_HAND, P2_TABLEAU, etc.
+            p_num = self.player
+            part = "hand" if self.seat_part == HAND else "tableau"
+            return f"Player {p_num}'s {part}"
 
 @dataclass
 class Action:
@@ -209,6 +218,38 @@ class Action:
         if self.count > 1: details.append(f"count={self.count}")
         if self.cards: details.append(f"cards={self.cards}")
         return f"Action({', '.join(details)})"
+
+    def __str__(self) -> str:
+        """Returns a natural language description of the action."""
+
+        # 1. Determine what is being moved
+        if self.cards:
+            if isinstance(self.cards, list):
+                item = f"{', '.join(c.short_name() for c in self.cards)}"
+            else:
+                item = self.cards.short_name()
+        else:
+            item = f"{self.count} card{'s' if self.count > 1 else ''}"
+
+        # 2. Format the Source and Target strings
+        src_str = str(self.source) if self.source is not None else "anywhere"
+        tgt_str = str(self.target) if self.target is not None else "unknown"
+
+        # 3. Choose the verb based on the movement
+        if self.source is None:
+            verb = "moves"
+        elif self.source == STACK:
+            verb = "draws" 
+        #elif self.source is not None and self.target is not None \
+                #and not self.source.shared and not self.target.shared \
+                #and self.source.player != self.target.player:
+            #verb = "takes"
+        elif self.target == DISCARD:
+            verb = "discards"
+        else:
+            verb = "moves"
+
+        return f"{verb} {item} from {src_str} to {tgt_str}"
 
 
 # ---------- Re-export enum members ----------
