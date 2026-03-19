@@ -1,6 +1,6 @@
 from enum import IntEnum
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import *
+from typing import *
 
 
 class Rank(IntEnum):
@@ -282,16 +282,16 @@ class CardMove:
 @dataclass
 class Say:
     text: str
-    target: Optional[PlayerId]
-
+    target: Optional[PlayerId] = None
 
 class Order(IntEnum):
-    RANDOM = 0
-    ASC = 1
-    DESC = 2
+    NO_ORDER = 0
+    RANDOM = 1
+    ASC = 2
+    DESC = 3
 
 class CardProperty(IntEnum):
-    NONE = 0
+    NO_PROPERTY = 0
     RANK = 1
     SUIT = 2
 
@@ -300,14 +300,15 @@ class Sorting:
     property: CardProperty
     order: Order
 
+@dataclass
 class Reorder:
     target: Location
-    sort: Iterable[Sorting]
+    sort: List[Sorting] = field(default_factory=list)
 
 @dataclass
 class Action:
     player: PlayerId
-    action: CardMove | Say | Reorder
+    intent: CardMove | Say | Reorder
 
 # ONLY A TABLE can execute an action so I Must extend interpret_input
 # ---------- Re-export enum members ----------
@@ -319,15 +320,21 @@ globals().update(Card.__members__)
 globals().update(PlayerId.__members__)
 globals().update(SeatPart.__members__)
 globals().update(Location.__members__)
+globals().update(Order.__members__)
+globals().update(CardProperty.__members__)
 
 __all__ = (
-    ["Rank", "Suit", "Card", "PlayerId",  "SeatPart", "Location", "CardMove"]
+    ["Rank", "Suit", "Card", "PlayerId",  "SeatPart", "Location", "CardMove", 
+     "Say", "Order", "CardProperty", "Sorting", "Reorder", "Action"]
     + list(Rank.__members__)
     + list(Suit.__members__)
     + list(Card.__members__)
     + list(PlayerId.__members__)
     + list(SeatPart.__members__)
     + list(Location.__members__)
+    + list(Order.__members__)
+    + list(CardProperty.__members__)
+    
 )
 
 

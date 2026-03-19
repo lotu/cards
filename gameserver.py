@@ -2,7 +2,6 @@ import asyncio
 import os
 import re
 from google import genai
-from logging import debug
 from cards import Table, table_to_str, describe_table
 from enums import *
 from parse import *
@@ -239,14 +238,14 @@ class GameServer:
                 # Interpret each player's input
                 for i, text in enumerate(inputs):
                     p = PlayerId.from_index(i)
-                    card_move = interpret_input(text, p)
+                    action = parse_action(text, p)
                     if card_move:
-                        print(f"{p} wants to {card_move}")
+                        print(f"{p} wants to {action}")
                         try:
                             # 4. Execute
-                            if self.table.execute_card_move(card_move):
+                            if self.table.execute_card_move(action):
                                 for player in self.players:
-                                    player.send_card_move(f"{p}", card_move)
+                                    player.send_card_move(f"{p}", action)
 
                         except ValueError as e:
                             self.players[i].send_message(f"Invalid move: {e}\n")
@@ -254,144 +253,6 @@ class GameServer:
                 self.turn_number += 1
         except KeyboardInterrupt:
             print("\nShutting down.")
-
-
-def interpret_input(text: str, player_idx: PlayerId) -> Optional[CardMove]:
-    s = text.lower().strip()
-    if not s:
-        return None
-
-    # --- Setup Defaults ---
-    my_seat_num = player_idx.num
-    my_hand    = Location.from_seat(player_idx, SeatPart.HAND)
-    my_tableau = Location.from_seat(player_idx, SeatPart.TABLEAU)
-    
-    # Final CardMove Variables
-    found_cards = []
-    found_count = None
-    source = None
-    target = None
-
-
-    # 1. EXTRACT LOCATIONS / PLAYERS (Prepositional Phrases)
-    # Identify Player
-    is_tableau = False
-    is_discard = False
-    is_stack = False
-
-    pp_matches = re.finditer(
-        r"(from|to|in|on)\s+(p[1-4]('s)?|my)?\s*(the)?\s*(tableau|table|board|discard|hand|pile|stack|deck|draw pile])?", s)
-    for pp_match in pp_matches:
-        pp_player_num = None
-        debug( f'pp_match 0: {pp_match.group(0)}, 1: {pp_match.group(1)}, 2: {pp_match.group(2)}, 3: {pp_match.group(3)}, 4: {pp_match.group(4)} ' )
-        if pp_match.group(2):
-            player_match = re.search(r'p([1-4])', pp_match.group(2))
-            pp_player_num = int(player_match.group(1)) if player_match else None
-            if re.search(r'my', pp_match.group(2)):
-                pp_player_num = player_idx
-        
-        
-        # Identify Part (Tableau vs Hand)
-        is_hand = pp_match.group(5) in ["hand"]
-        is_tableau = pp_match.group(5) in ["tableau", "table", "board"]
-        is_discard = pp_match.group(5) in ["discard", "pile"]
-        is_stack = pp_match.group(5) in ["stack", "deck", "draw pile"]
-        
-        # Determine Source/Target based on Prepositions
-        if pp_match.group(1) == "from":
-            if pp_player_num:
-                source = Location.from_seat(pp_player_num, SeatPart.TABLEAU if is_tableau else SeatPart.HAND)
-            elif is_discard: source = DISCARD
-            elif is_stack: source = STACK
-            elif is_hand: source = my_hand
-            elif is_tableau: source = my_tableau 
-        
-        if pp_match.group(1) in ["to", "in", "on"]:
-            if pp_player_num:
-                target = Location.from_seat(pp_player_num, SeatPart.TABLEAU if is_tableau else SeatPart.HAND)
-            elif is_hand:    target = my_hand
-            elif is_tableau: target = my_tableau
-            elif is_discard: target = DISCARD
-
-        debug (f"s: {source}, t: {target}, cs: {found_cards}, cn: {found_count}")
-        # Cleanup string of the locations we found
-        s = re.sub(pp_match.group(0), '', s)
-
-    # 2. EXTRACT NOUN SPECIFIC CARDS (Most Specific)
-    # We use parse_card_set, then remove those card names from the string 
-    # so their ranks/suits don't interfere with "count" extrcard_move later.
-    found_cards = parse_card_set(s)
-    if found_cards:
-        # Simple removal: this is a bit naive but works for standard card names
-        for card in found_cards:
-            s = s.replace(card.short_name().lower(), "")
-            # Also try to remove long names if they were used
-            s = s.replace(card.long_name().lower(), "")
-            s = s.replace("of", "") # Remove 'of' left over from card names
-        found_count = len(found_cards)
-    else:
-        # 3. EXTRACT NUMERIC QUANTITIES
-        # Now that cards and player IDs are gone, any digit left is the count
-        digit_match = re.search(r'\d+', s)
-        if digit_match:
-            found_count = int(digit_match.group())
-        else:
-            found_count = 1
-
-    # 4. EXTRACT INTENT (The Verb)
-    s = s.strip()
-    # Taking CardMove default target is hand
-    is_draw = any(k in s for k in ["draw", "take", "get", "grab", "hit", "pick"])
-    is_steal = any(k in s for k in ["steal", "rob", "snatch"])
-    # Giving card_moves Default source is hand 
-    is_play = any(k in s for k in ["play", "put", "set", "lay", "place"])
-    is_give = any(k in s for k in ["give", "transfer", "send"]) # XXX pass was in here but removed
-    is_discard_card_move = any(k in s for k in ["discard", "trash", "dump", "throw"])
-
-    debug (f"s: {source}, t: {target}, cs: {found_cards}, cn: {found_count}")
-    debug(f"draw: {is_draw}, play: {is_play}, give: {is_give}, steal: {is_steal}, discard: {is_discard_card_move}")
-    # If we got too many verbs this is nonsense/ non-parseable
-    if [is_draw, is_steal, is_play, is_give, is_discard_card_move].count(True) > 1:
-        return None
-
-    # 5. RESOLVE LOGIC & DEFAULTS
-    # Apply Intent-based Defaults
-
-    # Giving card_moves default to hand unless a card is specified
-    if (is_play or is_discard_card_move or is_give) and not found_cards:
-        source = source or my_hand
-
-    if is_play:
-        target = target or my_tableau
-    if is_discard_card_move:
-        target = target or DISCARD
-    if is_give:
-        pass
-        # Target must be another player; default to next player if not specified Not sure about default here
-        #if not target:
-            #target = Location.from_seat((my_seat_num % 4) + 1, SeatPart.HAND)
-
-    if is_steal or is_draw:
-        target = target or my_hand
-
-    if not found_cards: # Only need a default if we aren't grabing specific cards
-        if is_steal:
-            pass
-            # Source must be another player
-           # if not source:
-           #     target = Location.from_seat((my_seat_num % 4) + 1, SeatPart.HAND)
-        if is_draw: # or not (is_play or is_give or is_discard_card_move):
-            # Default fallback is a Draw card_move
-            source = source or (DISCARD if is_discard else STACK) #sound not default like this
-
-    debug (f"s: {source}, t: {target}, cs: {found_cards}, cn: {found_count}")
-    # Final check: If we still don't have a source/target, the command was too vague
-    # For card_moves where we are taking a specific card where the card is doesn't have 
-    # to be specified it's infered from the table.
-    if not source and not found_cards or not target:
-        return None
-
-    return CardMove(source=source, target=target, cards=found_cards, count=found_count)
 
 if __name__ == "__main__":
     server = GameServer()
