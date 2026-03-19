@@ -8,11 +8,10 @@ from parse import *
 
 # Abstract Player Class
 class Player:
-    def __init__(self, player_id):
+    def __init__(self, player: PlayerId, name: str = None):
         # TODO use Player ENUM
-        self.player = PlayerId.from_num(player_id)
-        self.id = player_id
-        self.name = f"Player {self.id}"
+        self.id = player
+        self.name = name if name is not None else f"{player}"
 
     def connect(self):
         """Initialize any necessary connections (pipes, API clients, etc)."""
@@ -30,23 +29,26 @@ class Player:
         self.send_message(f"{player} {card_move}\n")
 
     def send_turn(self, turn_number):
-        self.send_message(f"\n\n\n--- TURN {turn_number} ---\n")
+        self.send_message(f"\n\n--- TURN {turn_number} ---\n")
         
     def send_table(self, t):
         # self.send_message(f"{table_to_str(t)}\n")
-        self.send_message(f"{describe_table(t,self.player)}\n")
+        self.send_message(f"{describe_table(t,self.id)}\n\n")
 
 
 class FIFOPlayer(Player):
     def __init__(self, player_id, fifo_dir):
         super().__init__(player_id)
-        self.out_path = os.path.join(fifo_dir, f"p{self.id}_out")
-        self.in_path = os.path.join(fifo_dir, f"p{self.id}_in")
+        self.out_path = os.path.join(fifo_dir, f"p{self.id.num}_out")
+        self.in_path = os.path.join(fifo_dir, f"p{self.id.num}_in")
         
         self.fd_out = None
         self.fd_in = None
         self.input_buffer = ""
         self.last_input = ""
+
+    def __repr__(self):
+        return f"{self.id}:FIFOPlayer({self.name}, {self.out_path}, {self.in_path})"
 
     def connect(self):
         # Open Output (Non-blocking)
@@ -56,6 +58,10 @@ class FIFOPlayer(Player):
         # This allows us to "check" the pipe without hanging the whole script
         self.fd_in = os.open(self.in_path, os.O_RDONLY | os.O_NONBLOCK)
         print(f"-> {self.name} descriptors opened.")
+
+    def send_table(self, t):
+        self.send_message(f"{table_to_str(t)}\n")
+        # self.send_message(f"{describe_table(t,self.id)}\n\n")
 
     def send_message(self, message):
         if self.fd_out is not None:
@@ -107,8 +113,11 @@ class LLMPlayer(Player):
         self.pending_message = ""
 
         # Mirroring setup (using your FIFO structure)
-        self.out_path = os.path.join(fifo_dir, f"p{self.id}_out")
+        self.out_path = os.path.join(fifo_dir, f"p{self.id.num}_out")
         self.fd_out = None
+
+    def __repr__(self):
+        return f"{self.id}:LLMPlayer({self.name}, {self.model_id}, {self.out_path})"
 
     def connect(self):
         # 1. Initialize Gemini
@@ -117,9 +126,17 @@ class LLMPlayer(Player):
             "Respond brieflly with comands in the form of text. Example commands are draw 2 cards "
             "Discard ace of spades, play a card, or take 1 card from player 2. You will have to "
             "respond every 'turn' as the gameserver does not enforce any rules (much like "
-            "a pyscial table doesn't enforce the rules of a card game "
-            "We are currentlly developing this system every turn please respond with an "
-            "card_move described as text, please try diffrent things out."
+            "a pyscial table doesn't enforce the rules of a card game, you may talk with other "
+            "players by using 'say <message>' or 'tell <player> message' "
+            "There are two piles of cards one face down knownn as the stack, and one face up "
+            "known as the discard "
+            "You can draw cards 'draw 1 card from the stack', 'take 2 cards from discard' "
+            "take Queen of Heart form discard' etc. "
+            "to do nothing just say 'pass' you will need to do this if you don't want to take any "
+            "action right now "
+            "Each player has hand (which is conceled, and a tableau  which is no t"
+            "'play ace of clubs' put the ace in the tableau "
+            " You will be playing Go fish. Player 1 starts" 
  
         )
         self.chat_session = self.client.aio.chats.create(
@@ -147,11 +164,12 @@ class LLMPlayer(Player):
     def send_message(self, message):
         """Messages from the server (Table state, game logs)."""
         # Mirror the incoming server message so we see what the LLM sees
-        self._write_to_mirror(f"\n[SERVER -> LLM]:\n{message}\n")
+        self._write_to_mirror(f"[SERVER -> LLM]:\n{message}")
 
         # Buffer for the actual API call
         self.pending_message += message + "\n"
 
+    # TODO This should return (Player, str)
     async def wait_for_input(self) -> str:
         if not self.pending_message:
             return ""
@@ -183,14 +201,13 @@ class GameServer:
 
         self.fifo_dir = fifo_dir
         if test:
-            self.players = [FIFOPlayer(i, fifo_dir) for i in range(1, player_count + 1)]
+            self.players = [FIFOPlayer(PlayerId.from_num(i), fifo_dir) for i in range(1, player_count + 1)]
         else:
             self.players = [
-                FIFOPlayer(1, fifo_dir),
-                FIFOPlayer(2, fifo_dir),
-                #LLMPlayer(2, fifo_dir),
-                #LLMPlayer(3, fifo_dir),
-                #LLMPlayer(4, fifo_dir),
+                LLMPlayer(PLAYER_1, fifo_dir),
+                LLMPlayer(PLAYER_2, fifo_dir),
+                LLMPlayer(PLAYER_3, fifo_dir),
+                LLMPlayer(PLAYER_4, fifo_dir),
             ]
         self.turn_number = 1
         
@@ -204,6 +221,10 @@ class GameServer:
     def setup_game(self):
         """Handles shuffling and dealing logic."""
         print("Initializing deck and dealing cards...")
+        
+        for p in self.players:
+            print(p)
+
         # 1. Use standard deck and shuffle
         self.table.deck.shuffle()
         
@@ -236,23 +257,56 @@ class GameServer:
 
                 # TODO Need to have a way so that p1 isn't always interpreted first
                 # Interpret each player's input
+                # shuffled_inputs = random.shuffle(enumerate(inputs))
                 for i, text in enumerate(inputs):
                     p = PlayerId.from_index(i)
+                    # card move source
                     action = parse_action(text, p)
-                    if card_move:
-                        print(f"{p} wants to {action}")
-                        try:
-                            # 4. Execute
-                            if self.table.execute_card_move(action):
-                                for player in self.players:
-                                    player.send_card_move(f"{p}", action)
-
-                        except ValueError as e:
-                            self.players[i].send_message(f"Invalid move: {e}\n")
+                    if action:
+                        debug(f"Executing action from {p.num}: {action}")
+                        self.execute_action(p, action)
                 
                 self.turn_number += 1
+                await asyncio.sleep(1)
         except KeyboardInterrupt:
             print("\nShutting down.")
+
+    def get_name_map(self) -> dict[str, PlayerId]:
+        """Creates a map of seat names to PlayerIds for name resolution."""
+        return {
+            seat.name: PlayerId.from_index(i) 
+            for i, seat in enumerate(self.table.seats) if seat.name
+        }
+
+    def execute_action(self, actor_id: PlayerId, action: Action):
+        """Dispatches the action intent to the appropriate handler."""
+        intent = action.intent
+        
+        if isinstance(intent, Say):
+            self.handle_say(actor_id, intent)
+        elif isinstance(intent, CardMove):
+            if self.table.execute_card_move(intent):
+                # Broadcast the move to everyone for transparency
+                for p in self.players:
+                    p.send_card_move(actor_id, intent)
+
+    def handle_say(self, actor_id: PlayerId, say: Say):
+        """Routes chat messages based on the presence of a target."""
+        sender_name = self.players[actor_id.idx].name
+
+        if say.target is not None:
+            # Targeted Whisper (Sender and Receiver see it)
+            msg = f"[Whisper] {sender_name} -> {say.target}: {say.text}\n"
+            self.players[say.target.idx].send_message(msg)
+
+            # Show the sender that their message was sent
+            if say.target != actor_id:
+                self.players[actor_id.idx].send_message(msg)
+        else:
+            # Global Chat
+            msg = f"[Chat] {sender_name}: {say.text}\n"
+            for p in self.players:
+                p.send_message(msg)
 
 if __name__ == "__main__":
     server = GameServer()

@@ -284,6 +284,9 @@ class Say:
     text: str
     target: Optional[PlayerId] = None
 
+    def __repr__(self):
+        return f'Say("{self.text}", {self.target})'
+
 class Order(IntEnum):
     NO_ORDER = 0
     RANDOM = 1
@@ -309,6 +312,9 @@ class Reorder:
 class Action:
     player: PlayerId
     intent: CardMove | Say | Reorder
+
+    def __repr__(self):
+        return f"Action({self.player}, {self.intent})"
 
 # ONLY A TABLE can execute an action so I Must extend interpret_input
 # ---------- Re-export enum members ----------

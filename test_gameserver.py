@@ -4,6 +4,7 @@ import pytest
 import shutil
 from cards import *
 from gameserver import *
+from enums import *
 
 FIFO_TEST_DIR = "test_fifo"
 
@@ -38,7 +39,7 @@ def setup_fifos():
 async def test_player_input_capture(setup_fifos):
     """Test that wait_for_input only returns when a newline is sent."""
     count, folder = setup_fifos
-    player = FIFOPlayer(1, folder)
+    player = FIFOPlayer(PLAYER_1, folder)
     player.connect()
     
     # Wrap wait_for_input in a task
