@@ -10,20 +10,21 @@ from parse import *
 # Abstract Player Class
 class Player:
     def __init__(self, player_id):
+        # TODO use Player ENUM
+        self.player = PlayerId.from_num(player_id)
         self.id = player_id
         self.name = f"Player {self.id}"
-        self.last_input = ""
 
     def connect(self):
         """Initialize any necessary connections (pipes, API clients, etc)."""
         pass
 
-    def send_message(self, message):
-        """Send game state or text to the player."""
+    async def wait_for_input(self) -> str:
+        """Wait for the player to provide a command string."""
         raise NotImplementedError
 
-    async def wait_for_input(self):
-        """Wait for the player to provide a command string."""
+    def send_message(self, message):
+        """Send game state or text to the player."""
         raise NotImplementedError
 
     def send_action(self, player, action):
@@ -34,13 +35,12 @@ class Player:
         
     def send_table(self, t):
         # self.send_message(f"{table_to_str(t)}\n")
-        self.send_message(f"{describe_table(t)}\n")
+        self.send_message(f"{describe_table(t,self.player)}\n")
 
 
 class FIFOPlayer(Player):
     def __init__(self, player_id, fifo_dir):
-        self.id = player_id
-        self.name = f"Player {self.id}"
+        super().__init__(player_id)
         self.out_path = os.path.join(fifo_dir, f"p{self.id}_out")
         self.in_path = os.path.join(fifo_dir, f"p{self.id}_in")
         
@@ -65,7 +65,7 @@ class FIFOPlayer(Player):
             except OSError:
                 pass
 
-    async def wait_for_input(self):
+    async def wait_for_input(self) -> str:
         """
         Polls the file descriptor for a complete line.
         This is much more reliable for FIFOs than StreamReader.
@@ -153,7 +153,7 @@ class LLMPlayer(Player):
         # Buffer for the actual API call
         self.pending_message += message + "\n"
 
-    async def wait_for_input(self):
+    async def wait_for_input(self) -> str:
         if not self.pending_message:
             return ""
 
@@ -199,7 +199,7 @@ class GameServer:
         self.table = Table(seats=len(self.players))
         
         # Sync Table Seat names with Player names
-        for i, player in enumerate(self.players):
+        for i, player in enumerate(self.players): # TODO User PlayerId
             self.table.seats[i].name = player.name
 
     def setup_game(self):
@@ -238,14 +238,15 @@ class GameServer:
                 # TODO Need to have a way so that p1 isn't always interpreted first
                 # Interpret each player's input
                 for i, text in enumerate(inputs):
-                    action = interpret_input(text, i)
+                    p = PlayerId.from_index(i)
+                    action = interpret_input(text, p)
                     if action:
-                        print(f"Player {i+1} wants to {action}")
+                        print(f"{p} wants to {action}")
                         try:
                             # 4. Execute
                             if self.table.execute_action(action):
                                 for player in self.players:
-                                    player.send_action(f"Player {i+1}", action)
+                                    player.send_action(f"{p}", action)
 
                         except ValueError as e:
                             self.players[i].send_message(f"Invalid move: {e}\n")
@@ -255,15 +256,15 @@ class GameServer:
             print("\nShutting down.")
 
 
-def interpret_input(text: str, player_idx: int) -> Optional[Action]:
+def interpret_input(text: str, player_idx: PlayerId) -> Optional[Action]:
     s = text.lower().strip()
     if not s:
         return None
 
     # --- Setup Defaults ---
-    my_seat_num = player_idx + 1
-    my_hand    = Location.from_seat(my_seat_num, SeatPart.HAND)
-    my_tableau = Location.from_seat(my_seat_num, SeatPart.TABLEAU)
+    my_seat_num = player_idx.num
+    my_hand    = Location.from_seat(player_idx, SeatPart.HAND)
+    my_tableau = Location.from_seat(player_idx, SeatPart.TABLEAU)
     
     # Final Action Variables
     found_cards = []
@@ -287,7 +288,7 @@ def interpret_input(text: str, player_idx: int) -> Optional[Action]:
             player_match = re.search(r'p([1-4])', pp_match.group(2))
             pp_player_num = int(player_match.group(1)) if player_match else None
             if re.search(r'my', pp_match.group(2)):
-                pp_player_num = my_seat_num
+                pp_player_num = player_idx
         
         
         # Identify Part (Tableau vs Hand)
@@ -344,7 +345,7 @@ def interpret_input(text: str, player_idx: int) -> Optional[Action]:
     is_steal = any(k in s for k in ["steal", "rob", "snatch"])
     # Giving actions Default source is hand 
     is_play = any(k in s for k in ["play", "put", "set", "lay", "place"])
-    is_give = any(k in s for k in ["give", "pass", "transfer", "send"])
+    is_give = any(k in s for k in ["give", "transfer", "send"]) # XXX pass was in here but removed
     is_discard_action = any(k in s for k in ["discard", "trash", "dump", "throw"])
 
     debug (f"s: {source}, t: {target}, cs: {found_cards}, cn: {found_count}")
@@ -365,18 +366,20 @@ def interpret_input(text: str, player_idx: int) -> Optional[Action]:
     if is_discard_action:
         target = target or DISCARD
     if is_give:
+        pass
         # Target must be another player; default to next player if not specified Not sure about default here
-        if not target:
-            target = Location.from_seat((my_seat_num % 4) + 1, SeatPart.HAND)
+        #if not target:
+            #target = Location.from_seat((my_seat_num % 4) + 1, SeatPart.HAND)
 
     if is_steal or is_draw:
         target = target or my_hand
 
     if not found_cards: # Only need a default if we aren't grabing specific cards
         if is_steal:
+            pass
             # Source must be another player
-            if not source:
-                target = Location.from_seat((my_seat_num % 4) + 1, SeatPart.HAND)
+           # if not source:
+           #     target = Location.from_seat((my_seat_num % 4) + 1, SeatPart.HAND)
         if is_draw: # or not (is_play or is_give or is_discard_action):
             # Default fallback is a Draw action
             source = source or (DISCARD if is_discard else STACK) #sound not default like this

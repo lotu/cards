@@ -149,6 +149,33 @@ class Card(IntEnum):
         return self.long_name()
 
 
+class PlayerId(IntEnum):
+    PLAYER_1 = 0
+    PLAYER_2 = 1
+    PLAYER_3 = 2
+    PLAYER_4 = 3
+
+    @classmethod
+    def from_num(cls, num: int) -> "PlayerId":
+        "Number is the 1 index human facing value"
+        return cls(num - 1)
+
+    @classmethod
+    def from_index(cls, i: int) -> "PlayerId":
+        "Index is 0 index for lists/arrays"
+        return cls(i)
+
+    @property
+    def num(self) -> int:
+        return self.value + 1
+
+    @property
+    def idx(self) -> int:
+        return self.value
+
+    def __str__(self) -> str():
+        return f"Player {self.num}"
+
 class SeatPart(IntEnum):
     HAND    = 0
     TABLEAU = 1
@@ -171,21 +198,21 @@ class Location(IntEnum):
     DISCARD    = 10
 
     @classmethod
-    def from_seat(cls, seat: int, part: SeatPart) -> "Location":
-        if not isinstance(seat, int) or seat < 1 or seat > 4:
-            raise ValueError("seat must be an int between 1 and 4")
+    def from_seat(cls, seat: PlayerId, part: SeatPart) -> "Location":
+        if not isinstance(seat, PlayerId):
+            seat = PlayerId.from_num(seat) # Really don't like this but shrug
         if not isinstance(part, SeatPart):
             raise TypeError("part must be a SeatPart")
-        return cls((seat - 1) * 2 + part + 1)
+        return cls((seat.idx) * 2 + part + 1) # XXX
 
     @property
     def shared(self) -> bool:
         return self.value >= STACK
 
     @property
-    def player(self) -> Optional[int]:
+    def player(self) -> Optional[PlayerId]: # TODO
         # Returns 1-4 for players, None for shared
-        return ((self.value - 1) // 2) + 1 if not self.shared else None
+        return PlayerId.from_num(((self.value - 1) // 2) + 1) if not self.shared else None
 
     @property
     def seat_part(self) -> Optional[SeatPart]:
@@ -201,7 +228,7 @@ class Location(IntEnum):
             # Handles P1_HAND, P2_TABLEAU, etc.
             p_num = self.player
             part = "hand" if self.seat_part == HAND else "tableau"
-            return f"Player {p_num}'s {part}"
+            return f"{self.player}'s {self.seat_part.name.lower()}" # TODO
 
 @dataclass
 class Action:
@@ -219,6 +246,7 @@ class Action:
         if self.cards: details.append(f"cards={self.cards}")
         return f"Action({', '.join(details)})"
 
+    # TODO Dramatically simplify this it should just be moves x from y to z
     def __str__(self) -> str:
         """Returns a natural language description of the action."""
 
@@ -258,14 +286,16 @@ class Action:
 globals().update(Suit.__members__)
 globals().update(Rank.__members__)
 globals().update(Card.__members__)
+globals().update(PlayerId.__members__)
 globals().update(SeatPart.__members__)
 globals().update(Location.__members__)
 
 __all__ = (
-    ["Rank", "Suit", "Card", "SeatPart", "Location", "Action"]
+    ["Rank", "Suit", "Card", "PlayerId",  "SeatPart", "Location", "Action"]
     + list(Rank.__members__)
     + list(Suit.__members__)
     + list(Card.__members__)
+    + list(PlayerId.__members__)
     + list(SeatPart.__members__)
     + list(Location.__members__)
 )

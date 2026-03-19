@@ -7,9 +7,11 @@ from enums import *
 ##
 
 class CardSet:
-    def __init__(self, cards: Iterable[Card] | None = None):
-        """Initialize empty or with an iterable of cards."""
+    def __init__(self, cards: Iterable[Card] | None = None, stack: bool = False):
+        """Initialize empty or with an iterable of cards.
+        Stack determins how cards are added"""
         self.cards: List[Card] = list(cards) if cards is not None else []
+        self.stack = stack
 
     @classmethod
     def standard_deck(cls) -> "CardSet":
@@ -55,7 +57,10 @@ class CardSet:
         for c in to_add:
             if not isinstance(c, Card):
                 raise TypeError(f"Expected Card, got {type(c)}")
-        self.cards.extend(to_add)
+        if self.stack:
+            self.cards = to_add + self.cards  # TODO a deque might be better prob doesn't matter
+        else:
+            self.cards.extend(to_add)
         return to_add
 
     def draw(self, n: int | None = None):
@@ -149,7 +154,7 @@ class CardSet:
         raise ValueError("style must be 'long' or 'short'")
 
     def __str__(self):
-        return self.format("long")
+        return self.format("short")
 
     def __repr__(self):
         return f"CardSet({self.format('short')})"
@@ -177,8 +182,8 @@ class Table:
 
     def __init__(self, seats = 4, empty=False):
         self.deck = CardSet.standard_deck() if not empty else CardSet()
-        self.stack = CardSet()  # pile to draw from I didn't like draw.draw()
-        self.discard = CardSet()
+        self.stack = CardSet(stack=True)  # pile to draw from I didn't like draw.draw()
+        self.discard = CardSet(stack=True)
         self.seats = [Seat(n) for n in range(seats)]
 
     def __str__(self) -> str:
@@ -195,13 +200,13 @@ class Table:
         """Resolves a Location enum to a physical CardSet instance on the table."""
         if location is None:
             return None
-        if location == Location.STACK:
+        if location == STACK:
             return self.stack
-        if location == Location.DISCARD:
+        if location == DISCARD:
             return self.discard
 
         # Player-specific locations (P1-P4)
-        seat_idx = location.player - 1
+        seat_idx = location.player
         seat = self.seats[seat_idx]
 
         if location.seat_part == SeatPart.HAND:
@@ -265,7 +270,7 @@ def seat_sees_cards(table: Table, seat_index: int, cards: Iterable[Card]) -> boo
             return True
         
         # Can see their own Hand (seat_index 0 maps to Player 1)
-        if loc.seat_part == SeatPart.HAND and loc.player == (seat_index + 1):
+        if loc.seat_part == SeatPart.HAND and loc.player.idx == seat_index:
             return True
             
     # Everything else (Stack, other players' hands) is hidden
@@ -364,13 +369,13 @@ def table_to_str_4_seats(t):
     return grid_to_str(grid)
 
 ## 
-def describe_table(t: Table) -> str:
+def describe_table(t: Table, p: Player = None) -> str:
     """Returns a readable summary of the current table state."""
     description = []
 
     # Central Piles
     description.append("--- Central Piles ---")
-    description.append(f"Stack: {len(t.stack)} cards remaining.")
+    description.append(f"Stack: {len(t.stack)} cards")
     description.append(f"Discard Pile: {t.discard.format('short') if t.discard else 'Empty'}")
     description.append("")
 
@@ -380,12 +385,17 @@ def describe_table(t: Table) -> str:
         name = seat.name if seat.name else f"Player {i}"
 
         # Format Hand and Tableau
-        hand_str = seat.hand.format("short") if seat.hand else "Empty"
+        # TODO Move logic to card set
+        hand_str    = seat.hand.format("short")    if seat.hand    else "Empty"
         tableau_str = seat.tableau.format("short") if seat.tableau else "Empty"
 
         description.append(f"Seat {i} ({name}):")
-        description.append(f"  Hand:    {len(seat.hand)} cards")
-        description.append(f"  Tableau: [{tableau_str}]")
+        # Only show the cards if the it's this player or it's generic
+        if p is None or p == i:
+            description.append(f"  Hand:    {hand_str} ")
+        else:
+            description.append(f"  Hand:    {len(seat.hand)} cards")
+        description.append(f"  Tableau: {tableau_str}")
         description.append("-" * 20)
 
     return "\n".join(description)

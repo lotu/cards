@@ -6,7 +6,9 @@ from enums import *
 def test_location_from_seat():
     # Valid cases
     assert Location.from_seat(1, SeatPart.HAND) == P1_HAND
-    assert Location.from_seat(1, SeatPart.TABLEAU) == P1_TABLEAU
+    assert Location.from_seat(PLAYER_1, SeatPart.HAND) == P1_HAND
+    assert Location.from_seat(PLAYER_1, SeatPart.TABLEAU) == P1_TABLEAU
+    assert Location.from_seat(PLAYER_4, SeatPart.TABLEAU) == P4_TABLEAU
     assert Location.from_seat(4, SeatPart.TABLEAU) == P4_TABLEAU
     
     # Invalid cases
@@ -23,8 +25,8 @@ def test_location_properties():
     assert DISCARD.shared is True
 
     # Test player identification
-    assert P1_HAND.player == 1
-    assert P4_TABLEAU.player == 4
+    assert P1_HAND.player == PLAYER_1
+    assert P4_TABLEAU.player == PLAYER_4
     assert STACK.player is None
 
     # Test seat_part identification
@@ -84,3 +86,16 @@ def test_action_descriptions(source, target, count, cards, expected_snippet):
     
     # We check if the expected string is exactly the result
     assert result == expected_snippet
+
+def test_player():
+    assert PLAYER_1.value == 0
+    assert PLAYER_1.num == 1
+    assert PLAYER_1.idx == 0
+    assert str(PLAYER_1) == "Player 1"
+
+    assert PlayerId.from_num(2) == PLAYER_2
+    assert PlayerId.from_index(2) == PLAYER_3
+    
+    assert PLAYER_4.value == 3
+    assert PLAYER_4.num == 4
+    assert str(PLAYER_4) == "Player 4"

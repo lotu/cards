@@ -120,7 +120,6 @@ def test_add_rejects_invalid_type():
     with pytest.raises(TypeError):
         cs.add(123)  # type: ignore
 
-
 # ---------- Draw ----------
 
 def test_draw_single_card():
@@ -266,6 +265,38 @@ def test_pull_zero_cards():
     assert pulled == []
     assert len(cs) == 2
 
+
+# ------ Stack vs Queue -------
+
+def test_add_queue():
+    cs = CardSet(stack = False)
+    cs.add(ACE_OF_SPADES)
+    assert cs.cards == [ACE_OF_SPADES]
+
+    cs.add(TWO_OF_CLUBS)
+    assert cs.cards == [ ACE_OF_SPADES, TWO_OF_CLUBS]
+
+    assert cs.draw() == ACE_OF_SPADES
+    assert cs.cards == [TWO_OF_CLUBS]
+
+    assert cs.draw() == TWO_OF_CLUBS
+    assert cs.cards == []
+
+def test_add_stack():
+    cs = CardSet(stack = True)
+    cs.add(ACE_OF_SPADES)
+    assert cs.cards == [ACE_OF_SPADES]
+
+    cs.add(TWO_OF_CLUBS)
+    assert cs.cards == [TWO_OF_CLUBS, ACE_OF_SPADES]
+
+    assert cs.draw() == TWO_OF_CLUBS
+    assert cs.cards == [ACE_OF_SPADES]
+
+    assert cs.draw() == ACE_OF_SPADES
+    assert cs.cards == []
+
+
 # ---------- Slicing ----------
 
 def test_slicing_returns_cardset():
@@ -337,5 +368,5 @@ def test_format_short():
 
 def test_str_and_repr():
     cs = CardSet([ACE_OF_SPADES])
-    assert str(cs) == "Ace of Spades"
-    assert "A♠" in repr(cs)
+    assert str(cs) == "A♠"
+    assert "CardSet(A♠)" in repr(cs)
