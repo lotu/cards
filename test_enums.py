@@ -34,20 +34,20 @@ def test_location_properties():
     assert P2_TABLEAU.seat_part == SeatPart.TABLEAU
     assert STACK.seat_part is None
 
-# --- Tests for Action ---
+# --- Tests for CardMove ---
 
-def test_action_creation():
-    action = Action(source=P1_HAND, target=STACK, count=2)
-    assert action.source == P1_HAND
-    assert action.target == STACK
-    assert action.count == 2
-    assert action.cards is None
+def test_card_move_creation():
+    card_move = CardMove(source=P1_HAND, target=STACK, count=2)
+    assert card_move.source == P1_HAND
+    assert card_move.target == STACK
+    assert card_move.count == 2
+    assert card_move.cards is None
 
-def test_action_repr():
+def test_card_move_repr():
     # Ensure the string representation looks correct
-    action = Action(source=P1_HAND, target=STACK)
+    card_move = CardMove(source=P1_HAND, target=STACK)
     # Check that the string contains expected info
-    rep = repr(action)
+    rep = repr(card_move)
     assert "source=P1_HAND" in rep
     assert "target=STACK" in rep
 
@@ -78,11 +78,11 @@ def test_action_repr():
     (P4_HAND, DISCARD, 2, [TWO_OF_CLUBS, THREE_OF_CLUBS], 
      "discards 2♣, 3♣ from Player 4's hand to the discard"),
 ])
-def test_action_descriptions(source, target, count, cards, expected_snippet):
-    """Verifies that Action.describe() produces the correct natural language string."""
-    action = Action(source=source, target=target, count=count, cards=cards)
+def test_card_move_descriptions(source, target, count, cards, expected_snippet):
+    """Verifies that CardMove.describe() produces the correct natural language string."""
+    card_move = CardMove(source=source, target=target, count=count, cards=cards)
     
-    result = action.__str__()
+    result = card_move.__str__()
     
     # We check if the expected string is exactly the result
     assert result == expected_snippet

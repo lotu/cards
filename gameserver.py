@@ -27,8 +27,8 @@ class Player:
         """Send game state or text to the player."""
         raise NotImplementedError
 
-    def send_action(self, player, action):
-        self.send_message(f"{player} {action}\n")
+    def send_card_move(self, player, card_move):
+        self.send_message(f"{player} {card_move}\n")
 
     def send_turn(self, turn_number):
         self.send_message(f"\n\n\n--- TURN {turn_number} ---\n")
@@ -120,7 +120,7 @@ class LLMPlayer(Player):
             "respond every 'turn' as the gameserver does not enforce any rules (much like "
             "a pyscial table doesn't enforce the rules of a card game "
             "We are currentlly developing this system every turn please respond with an "
-            "action described as text, please try diffrent things out."
+            "card_move described as text, please try diffrent things out."
  
         )
         self.chat_session = self.client.aio.chats.create(
@@ -239,14 +239,14 @@ class GameServer:
                 # Interpret each player's input
                 for i, text in enumerate(inputs):
                     p = PlayerId.from_index(i)
-                    action = interpret_input(text, p)
-                    if action:
-                        print(f"{p} wants to {action}")
+                    card_move = interpret_input(text, p)
+                    if card_move:
+                        print(f"{p} wants to {card_move}")
                         try:
                             # 4. Execute
-                            if self.table.execute_action(action):
+                            if self.table.execute_card_move(card_move):
                                 for player in self.players:
-                                    player.send_action(f"{p}", action)
+                                    player.send_card_move(f"{p}", card_move)
 
                         except ValueError as e:
                             self.players[i].send_message(f"Invalid move: {e}\n")
@@ -256,7 +256,7 @@ class GameServer:
             print("\nShutting down.")
 
 
-def interpret_input(text: str, player_idx: PlayerId) -> Optional[Action]:
+def interpret_input(text: str, player_idx: PlayerId) -> Optional[CardMove]:
     s = text.lower().strip()
     if not s:
         return None
@@ -266,7 +266,7 @@ def interpret_input(text: str, player_idx: PlayerId) -> Optional[Action]:
     my_hand    = Location.from_seat(player_idx, SeatPart.HAND)
     my_tableau = Location.from_seat(player_idx, SeatPart.TABLEAU)
     
-    # Final Action Variables
+    # Final CardMove Variables
     found_cards = []
     found_count = None
     source = None
@@ -319,7 +319,7 @@ def interpret_input(text: str, player_idx: PlayerId) -> Optional[Action]:
 
     # 2. EXTRACT NOUN SPECIFIC CARDS (Most Specific)
     # We use parse_card_set, then remove those card names from the string 
-    # so their ranks/suits don't interfere with "count" extraction later.
+    # so their ranks/suits don't interfere with "count" extrcard_move later.
     found_cards = parse_card_set(s)
     if found_cards:
         # Simple removal: this is a bit naive but works for standard card names
@@ -340,30 +340,30 @@ def interpret_input(text: str, player_idx: PlayerId) -> Optional[Action]:
 
     # 4. EXTRACT INTENT (The Verb)
     s = s.strip()
-    # Taking Action default target is hand
+    # Taking CardMove default target is hand
     is_draw = any(k in s for k in ["draw", "take", "get", "grab", "hit", "pick"])
     is_steal = any(k in s for k in ["steal", "rob", "snatch"])
-    # Giving actions Default source is hand 
+    # Giving card_moves Default source is hand 
     is_play = any(k in s for k in ["play", "put", "set", "lay", "place"])
     is_give = any(k in s for k in ["give", "transfer", "send"]) # XXX pass was in here but removed
-    is_discard_action = any(k in s for k in ["discard", "trash", "dump", "throw"])
+    is_discard_card_move = any(k in s for k in ["discard", "trash", "dump", "throw"])
 
     debug (f"s: {source}, t: {target}, cs: {found_cards}, cn: {found_count}")
-    debug(f"draw: {is_draw}, play: {is_play}, give: {is_give}, steal: {is_steal}, discard: {is_discard_action}")
+    debug(f"draw: {is_draw}, play: {is_play}, give: {is_give}, steal: {is_steal}, discard: {is_discard_card_move}")
     # If we got too many verbs this is nonsense/ non-parseable
-    if [is_draw, is_steal, is_play, is_give, is_discard_action].count(True) > 1:
+    if [is_draw, is_steal, is_play, is_give, is_discard_card_move].count(True) > 1:
         return None
 
     # 5. RESOLVE LOGIC & DEFAULTS
     # Apply Intent-based Defaults
 
-    # Giving actions default to hand unless a card is specified
-    if (is_play or is_discard_action or is_give) and not found_cards:
+    # Giving card_moves default to hand unless a card is specified
+    if (is_play or is_discard_card_move or is_give) and not found_cards:
         source = source or my_hand
 
     if is_play:
         target = target or my_tableau
-    if is_discard_action:
+    if is_discard_card_move:
         target = target or DISCARD
     if is_give:
         pass
@@ -380,18 +380,18 @@ def interpret_input(text: str, player_idx: PlayerId) -> Optional[Action]:
             # Source must be another player
            # if not source:
            #     target = Location.from_seat((my_seat_num % 4) + 1, SeatPart.HAND)
-        if is_draw: # or not (is_play or is_give or is_discard_action):
-            # Default fallback is a Draw action
+        if is_draw: # or not (is_play or is_give or is_discard_card_move):
+            # Default fallback is a Draw card_move
             source = source or (DISCARD if is_discard else STACK) #sound not default like this
 
     debug (f"s: {source}, t: {target}, cs: {found_cards}, cn: {found_count}")
     # Final check: If we still don't have a source/target, the command was too vague
-    # For actions where we are taking a specific card where the card is doesn't have 
+    # For card_moves where we are taking a specific card where the card is doesn't have 
     # to be specified it's infered from the table.
     if not source and not found_cards or not target:
         return None
 
-    return Action(source=source, target=target, cards=found_cards, count=found_count)
+    return CardMove(source=source, target=target, cards=found_cards, count=found_count)
 
 if __name__ == "__main__":
     server = GameServer()

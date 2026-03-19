@@ -214,27 +214,27 @@ class Table:
         else:
             return seat.tableau
 
-    def execute_action(self, action: Action) -> bool:
-        """Performs the physical movement of cards defined by the Action."""
-        source = self._get_cardset(action.source)
-        target = self._get_cardset(action.target)
+    def execute_card_move(self, card_move: CardMove) -> bool:
+        """Performs the physical movement of cards defined by the CardMove."""
+        source = self._get_cardset(card_move.source)
+        target = self._get_cardset(card_move.target)
         # Case 1: Moving a specific named card (e.g., from Discard)
-        if action.cards:
+        if card_move.cards:
             if source is None:
-                loc = locate_cards(self, action.cards)
+                loc = locate_cards(self, card_move.cards)
                 if loc is None:
                     return False
                 source = self._get_cardset(loc)
             debug(f"source: {source}")
             debug(f"target: {target}")
-            cards = target.add(source.pick(action.cards))
+            cards = target.add(source.pick(card_move.cards))
             return len(cards) != 0
 
         # Case 2: Moving a quantity of cards (e.g., Drawing from Stack)
         else:
             # We draw whatever is available up to the requested count
-            actual_count = min(len(source.cards), action.count)
-            if len(source) >= action.count:
+            actual_count = min(len(source.cards), card_move.count)
+            if len(source) >= card_move.count:
                 target.add( source.draw(actual_count) )
             else:
                 return False

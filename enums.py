@@ -183,7 +183,7 @@ class SeatPart(IntEnum):
     def __str__(self) -> str:
         return self.name.title()
 
-# --- Action Enums (Explicitly defined values) ---
+# --- CardMove Enums (Explicitly defined values) ---
 
 class Location(IntEnum):
     P1_HAND    = 1
@@ -231,7 +231,7 @@ class Location(IntEnum):
             return f"{self.player}'s {self.seat_part.name.lower()}" # TODO
 
 @dataclass
-class Action:
+class CardMove:
     """A structured representation of a player's intent."""
     source: Location
     target: Location
@@ -244,11 +244,11 @@ class Action:
         if self.target: details.append(f"target={self.target.name}")
         if self.count > 1: details.append(f"count={self.count}")
         if self.cards: details.append(f"cards={self.cards}")
-        return f"Action({', '.join(details)})"
+        return f"CardMove({', '.join(details)})"
 
     # TODO Dramatically simplify this it should just be moves x from y to z
     def __str__(self) -> str:
-        """Returns a natural language description of the action."""
+        """Returns a natural language description of the card_move."""
 
         # 1. Determine what is being moved
         if self.cards:
@@ -279,7 +279,37 @@ class Action:
 
         return f"{verb} {item} from {src_str} to {tgt_str}"
 
+@dataclass
+class Say:
+    text: str
+    target: Optional[PlayerId]
 
+
+class Order(IntEnum):
+    RANDOM = 0
+    ASC = 1
+    DESC = 2
+
+class CardProperty(IntEnum):
+    NONE = 0
+    RANK = 1
+    SUIT = 2
+
+@dataclass
+class Sorting:
+    property: CardProperty
+    order: Order
+
+class Reorder:
+    target: Location
+    sort: Iterable[Sorting]
+
+@dataclass
+class Action:
+    player: PlayerId
+    action: CardMove | Say | Reorder
+
+# ONLY A TABLE can execute an action so I Must extend interpret_input
 # ---------- Re-export enum members ----------
 
 
@@ -291,7 +321,7 @@ globals().update(SeatPart.__members__)
 globals().update(Location.__members__)
 
 __all__ = (
-    ["Rank", "Suit", "Card", "PlayerId",  "SeatPart", "Location", "Action"]
+    ["Rank", "Suit", "Card", "PlayerId",  "SeatPart", "Location", "CardMove"]
     + list(Rank.__members__)
     + list(Suit.__members__)
     + list(Card.__members__)

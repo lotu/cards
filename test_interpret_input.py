@@ -2,7 +2,7 @@ import pytest
 from gameserver import  interpret_input
 from enums import *
 
-# --- Test Parsing of Complex Interactions ---
+# --- Test Parsing of Complex Intercard_moves ---
 
 test_parameters = [
     # Playing to own tableau
@@ -53,7 +53,7 @@ test_parameters = [
     # Grabing specifc cards doesn't require a source
     ("get ace of spades", PLAYER_1, None, P1_HAND, [ACE_OF_SPADES], 1),
 
-    # --- Interactions between players ---
+    # --- Intercard_moves between players ---
     ("take from p2", PLAYER_1, P2_HAND, P1_HAND, None, 1),      # P1 steals from P2
     ("give to p1", PLAYER_2, P2_HAND, P1_HAND, None, 1),      # P2 gives to P1
     ("steal from p1 tableau", PLAYER_1, P1_TABLEAU, P1_HAND, None, 1), # Oops, P1 steals from self?
@@ -62,15 +62,15 @@ test_parameters = [
     ("send 4 cards from the stack to p3's hand", PLAYER_3, STACK, P3_HAND, None, 4),
 ]
 @pytest.mark.parametrize("text, player_idx, expected_source, expected_target, expected_card, expected_count", test_parameters)
-def test_interactions(text, player_idx, expected_source, expected_target, expected_card, expected_count):
-    action = interpret_input(text, player_idx)
+def test_intercard_moves(text, player_idx, expected_source, expected_target, expected_card, expected_count):
+    card_move = interpret_input(text, player_idx)
     
-    assert action is not None
-    assert action.source == expected_source
-    assert action.target == expected_target
-    assert action.count == expected_count
+    assert card_move is not None
+    assert card_move.source == expected_source
+    assert card_move.target == expected_target
+    assert card_move.count == expected_count
     if expected_card:
-        assert action.cards == expected_card
+        assert card_move.cards == expected_card
 
 # --- Parameterized 'None' / Garbage Tests ---
 

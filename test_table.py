@@ -120,39 +120,39 @@ def test_seat_sees_cards_visibility_rules():
     assert seat_sees_cards(t, 0, [KING_OF_SPADES]) is False  # Opponent Hand
     assert seat_sees_cards(t, 0, [TWO_OF_CLUBS]) is False    # Stack
 
-# --------- Execute Action ----------------
+# --------- Execute CardMove ----------------
 
 
-@pytest.mark.parametrize("action, setup_cards, expected_source_len, expected_target_len", [
+@pytest.mark.parametrize("card_move, setup_cards, expected_source_len, expected_target_len", [
     # Scenario 1: Player 1 plays a card from hand to their own tableau
     (
-        Action(source=P1_HAND, target=P1_TABLEAU, cards=ACE_OF_SPADES),
+        CardMove(source=P1_HAND, target=P1_TABLEAU, cards=ACE_OF_SPADES),
         {P1_HAND: [ACE_OF_SPADES], P1_TABLEAU: []},
         0, 1
     ),
     # Move with card set not properlly done XXX
     # # Scenario 1: Player 1 plays a card from hand to their own tableau
     # (
-    #     Action(source=P1_HAND, target=P1_TABLEAU, cards=[ACE_OF_SPADES]),
+    #     CardMove(source=P1_HAND, target=P1_TABLEAU, cards=[ACE_OF_SPADES]),
     #     {P1_HAND: [ACE_OF_SPADES], P1_TABLEAU: []},
     #     0, 1
     # ),
 
     # # Scenario 2: Player 1 takes 1 random card from Player 2's hand
     (
-        Action(source=P2_HAND, target=P1_HAND, count=1),
+        CardMove(source=P2_HAND, target=P1_HAND, count=1),
         {P2_HAND: [KING_OF_CLUBS, QUEEN_OF_CLUBS], P1_HAND: []},
         1, 1
     ),
     # Scenario 3: Player 1 steals a specific card from Player 2's tableau
     (
-        Action(source=P2_TABLEAU, target=P1_HAND, cards=TEN_OF_DIAMONDS),
+        CardMove(source=P2_TABLEAU, target=P1_HAND, cards=TEN_OF_DIAMONDS),
         {P2_TABLEAU: [TEN_OF_DIAMONDS], P1_HAND: []},
         0, 1
     ),
 ])
-def test_execute_player_moves_old(table, action, setup_cards, expected_source_len, expected_target_len):
-    """Verify Table.execute_action correctly moves cards between player zones."""
+def test_execute_player_moves_old(table, card_move, setup_cards, expected_source_len, expected_target_len):
+    """Verify Table.execute_card_move correctly moves cards between player zones."""
     # 1. Setup the state
     for loc, card_list in setup_cards.items():
         # Using the helper you wrote for the Table class
@@ -160,15 +160,15 @@ def test_execute_player_moves_old(table, action, setup_cards, expected_source_le
         cardset.cards = list(card_list)
 
     # 2. Execute
-    table.execute_action(action)
+    table.execute_card_move(card_move)
 
     # 3. Verify
-    assert len(table._get_cardset(action.source).cards) == expected_source_len
-    assert len(table._get_cardset(action.target).cards) == expected_target_len
+    assert len(table._get_cardset(card_move.source).cards) == expected_source_len
+    assert len(table._get_cardset(card_move.target).cards) == expected_target_len
 
     # If a specific card was moved, verify it's in the target
-    if action.cards:
-        assert action.cards in table._get_cardset(action.target).cards
+    if card_move.cards:
+        assert card_move.cards in table._get_cardset(card_move.target).cards
 
 @pytest.fixture
 def table():
@@ -213,10 +213,10 @@ def table():
     ],
 )
 def test_execute_player_moves(table, source, target, cards, count, expected, not_expected):
-    """Verify execute_action moves exact card contents correctly."""
+    """Verify execute_card_move moves exact card contents correctly."""
     # ---- Execute ----
     # assert isinstance(cards, Card)
-    assert table.execute_action(Action(source, target, count, cards))
+    assert table.execute_card_move(CardMove(source, target, count, cards))
     debug(f"table:\n{table.__str__()}")
 
         
@@ -242,9 +242,9 @@ def test_execute_player_moves(table, source, target, cards, count, expected, not
     ],
 )
 def test_execute_failure(table, source, target, cards, count):
-    """Verify execute_action moves exact card contents correctly."""
+    """Verify execute_card_move moves exact card contents correctly."""
     # ---- Execute ----
     before_table = deepcopy(table)
-    assert not table.execute_action(Action(source, target, count, cards))
+    assert not table.execute_card_move(CardMove(source, target, count, cards))
         
     assert before_table == table
