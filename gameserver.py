@@ -1,10 +1,22 @@
 import asyncio
+import sys
 import os
 import re
+from datetime import datetime
 from google import genai
+import logging 
 from cards import Table, table_to_str, describe_table
 from enums import *
 from parse import *
+
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.WARNING) 
+logger.setLevel(level=logging.DEBUG) 
+debug = logger.debug
+info = print
+
+
 
 # Abstract Player Class
 class Player:
@@ -57,7 +69,7 @@ class FIFOPlayer(Player):
         # Open Input in Non-Blocking mode
         # This allows us to "check" the pipe without hanging the whole script
         self.fd_in = os.open(self.in_path, os.O_RDONLY | os.O_NONBLOCK)
-        print(f"-> {self.name} descriptors opened.")
+        debug(f"-> {self.name} fifo opened.")
 
     def send_table(self, t):
         self.send_message(f"{table_to_str(t)}\n")
@@ -75,7 +87,7 @@ class FIFOPlayer(Player):
         Polls the file descriptor for a complete line.
         This is much more reliable for FIFOs than StreamReader.
         """
-        print(f"DEBUG: {self.name} is waiting for input...")
+        debug(f"{self.name} is waiting for input...")
         while True:
             try:
                 # Read whatever is in the pipe buffer (up to 1024 bytes)
@@ -92,19 +104,22 @@ class FIFOPlayer(Player):
                         # Keep the remainder in the buffer
                         self.input_buffer = "\n".join(lines[1:])
                         
-                        print(f"DEBUG: {self.name} sent: {self.last_input}")
+                        debug(f"{self.name} sent: {self.last_input}")
                         return self.last_input
             except BlockingIOError:
                 # This just means there is no data to read right now
                 pass
             except Exception as e:
-                print(f"Read error on {self.name}: {e}")
+                error(f"Read error on {self.name}: {e}")
             
             # Sleep a tiny bit to prevent 100% CPU usage while polling
             await asyncio.sleep(0.1)
 
 class LLMPlayer(Player):
-    def __init__(self, player_id, fifo_dir, api_key=None, model_id="gemini-2.5-flash-lite"):
+    def __init__(self, player_id, fifo_dir, api_key=None,
+                 model_id="gemini-2.5-flash"
+                 #model_id="gemini-3.1-pro-preview"
+                 ):
         super().__init__(player_id)
         # Gemini setup
         self.client = genai.Client(api_key=api_key)
@@ -122,23 +137,38 @@ class LLMPlayer(Player):
     def connect(self):
         # 1. Initialize Gemini
         instructions = (
-            f"You are {self.name} playing a text-based card game. "
-            "Respond brieflly with comands in the form of text. Example commands are draw 2 cards "
-            "Discard ace of spades, play a card, or take 1 card from player 2. You will have to "
-            "respond every 'turn' as the gameserver does not enforce any rules (much like "
-            "a pyscial table doesn't enforce the rules of a card game, you may talk with other "
-            "players by using 'say <message>' or 'tell <player> message' "
-            "There are two piles of cards one face down knownn as the stack, and one face up "
-            "known as the discard "
-            "You can draw cards 'draw 1 card from the stack', 'take 2 cards from discard' "
-            "take Queen of Heart form discard' etc. "
-            "to do nothing just say 'pass' you will need to do this if you don't want to take any "
-            "action right now "
-            "Each player has hand (which is conceled, and a tableau  which is no t"
-            "'play ace of clubs' put the ace in the tableau "
-            " You will be playing Go fish. Player 1 starts" 
- 
-        )
+            f"""
+            You will be playing cards. 
+            Respond briefly with commands in the form of text.
+            The game server only keeps track of the cards it does not enforce any rules or turn order.
+            You, the players, are responsible for knowing and following the rules.
+            This means only acting when it is appropriate.
+            If it is not appropriate for you to act reply with "pass" to do nothing.  
+            You may communicate with other players with "Say <message>"
+
+            In the middle of the table are:
+            1. The stack, it is face down, the draw command defaults to the stack
+            2. The discard, it is face up, the discard command put cards here.
+
+            Each player has:
+            1. A hand, which is hidden.
+            2. A tableau, which is visible to all players, when you play a card it goes here.
+
+            Example commands to move cards: 
+            Draw 2 cards: Move the top two card of the stack to your hand
+            Discard ace of spades: Move the ace of spades to the discard pile
+            play 2♣: Put the 2 of clubs from your hand into your tableau
+            take 1 card from player 2: Move one random card from player 2's hand to your own
+            give player 1 3♣ 4♢: Move the three of clubs and the 4 of diamonds to player 1's hand
+            
+            You my use Unicode or spell out the card names.
+
+            You will be playing Go Fish with 3 other AIs.
+            If the rules are unclear come to an agreement as a group.
+            Player 1 starts 
+
+            You are {self.name}.
+ """)
         self.chat_session = self.client.aio.chats.create(
             model=self.model_id,
             config={'system_instruction': instructions}
@@ -148,9 +178,9 @@ class LLMPlayer(Player):
         # We use Non-blocking so the server doesn't hang if no one is listening
         try:
             self.fd_out = os.open(self.out_path, os.O_WRONLY | os.O_NONBLOCK)
-            print(f"-> {self.name} mirroring to {self.out_path}")
+            debug(f"-> {self.name} mirroring to {self.out_path}")
         except OSError:
-            print(f"-> {self.name} could not open mirror pipe (no listener).")
+            error(f"-> {self.name} could not open mirror pipe (no listener).")
 
     def _write_to_mirror(self, text):
         """Helper to push text to the FIFO if open."""
@@ -194,7 +224,11 @@ class LLMPlayer(Player):
 ## 
 
 class GameServer:
-    def __init__(self, player_count=4, fifo_dir="fifo", test=False):
+    def __init__(self, player_count=2, fifo_dir="fifo", test=False):
+        print("=" * 80)
+        print("Starting Game Server At: ", datetime.now())
+        print("Players: ", player_count)
+        print()
         # UI Control Booleans
         self.show_text_desc = False
         self.show_grid_ui = True
@@ -204,12 +238,19 @@ class GameServer:
             self.players = [FIFOPlayer(PlayerId.from_num(i), fifo_dir) for i in range(1, player_count + 1)]
         else:
             self.players = [
-                LLMPlayer(PLAYER_1, fifo_dir),
-                LLMPlayer(PLAYER_2, fifo_dir),
-                LLMPlayer(PLAYER_3, fifo_dir),
-                LLMPlayer(PLAYER_4, fifo_dir),
+                #LLMPlayer(PLAYER_1, fifo_dir),
+                FIFOPlayer(PLAYER_1, fifo_dir),
+                FIFOPlayer(PLAYER_2, fifo_dir),
+                #LLMPlayer(PLAYER_2, fifo_dir),
+                # LLMPlayer(PLAYER_3, fifo_dir),
+                # LLMPlayer(PLAYER_4, fifo_dir),
             ]
         self.turn_number = 1
+
+        for p in self.players:
+            print(p)
+        print("=" * 80)
+        print()
         
         # 1. Create the Table
         self.table = Table(seats=len(self.players))
@@ -220,11 +261,8 @@ class GameServer:
 
     def setup_game(self):
         """Handles shuffling and dealing logic."""
-        print("Initializing deck and dealing cards...")
+        debug("Initializing deck and dealing cards...")
         
-        for p in self.players:
-            print(p)
-
         # 1. Use standard deck and shuffle
         self.table.deck.shuffle()
         
@@ -238,8 +276,8 @@ class GameServer:
     async def broadcast_state(self):
         """Sends the board representation to all players."""
         for p in self.players:
-            p.send_turn(self.turn_number)
             p.send_table(self.table)
+            p.send_turn(self.turn_number)
 
     async def run_game(self):
         self.setup_game()
@@ -249,11 +287,21 @@ class GameServer:
         try:
             while True:
                 await self.broadcast_state()
+
+                print(table_to_str(self.table))
+                print()
+                print(f"--- Turn {self.turn_number} ---")
+                print()
                 
-                print(f"Server: Waiting for players to acknowledge Turn {self.turn_number}...")
+                debug(f"Server: Waiting for players to acknowledge Turn {self.turn_number}...")
                 
                 # Wait for all players to send a line (ignoring the content for now)
                 inputs = await asyncio.gather(*(p.wait_for_input() for p in self.players))
+
+                # Pause for a bit 
+                # print("press Enter", file=sys.stderr)
+                # await asyncio.to_thread(input, "")
+                # await asyncio.sleep(15)
 
                 # TODO Need to have a way so that p1 isn't always interpreted first
                 # Interpret each player's input
@@ -261,15 +309,15 @@ class GameServer:
                 for i, text in enumerate(inputs):
                     p = PlayerId.from_index(i)
                     # card move source
-                    action = parse_action(text, p)
-                    if action:
-                        debug(f"Executing action from {p.num}: {action}")
-                        self.execute_action(p, action)
+                    for line in text.split('\n'):
+                        action = parse_action(line, p)
+                        if action:
+                            debug(f"Executing action: {action}")
+                            self.execute_action(action)
                 
                 self.turn_number += 1
-                await asyncio.sleep(1)
         except KeyboardInterrupt:
-            print("\nShutting down.")
+            info("\nShutting down.")
 
     def get_name_map(self) -> dict[str, PlayerId]:
         """Creates a map of seat names to PlayerIds for name resolution."""
@@ -278,22 +326,28 @@ class GameServer:
             for i, seat in enumerate(self.table.seats) if seat.name
         }
 
-    def execute_action(self, actor_id: PlayerId, action: Action):
+    def execute_action(self,  action: Action):
         """Dispatches the action intent to the appropriate handler."""
         intent = action.intent
+        actor_id = action.player
         
         if isinstance(intent, Say):
             self.handle_say(actor_id, intent)
         elif isinstance(intent, CardMove):
-            if self.table.execute_card_move(intent):
-                # Broadcast the move to everyone for transparency
-                for p in self.players:
-                    p.send_card_move(actor_id, intent)
+            self.handle_card_move(actor_id, intent)
+
+    def handle_card_move(self, actor_id: PlayerId, card_move: CardMove):
+        if self.table.execute_card_move(card_move):
+            print(actor_id, card_move)
+            # Broadcast the move to everyone for transparency
+            for p in self.players:
+                p.send_card_move(actor_id, card_move)
 
     def handle_say(self, actor_id: PlayerId, say: Say):
         """Routes chat messages based on the presence of a target."""
         sender_name = self.players[actor_id.idx].name
 
+        print(f"{sender_name}: {say.text}")
         if say.target is not None:
             # Targeted Whisper (Sender and Receiver see it)
             msg = f"[Whisper] {sender_name} -> {say.target}: {say.text}\n"

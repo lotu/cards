@@ -1,6 +1,9 @@
 import re
 from enums import *
-from logging import debug
+import logging
+
+logger = logging.getLogger(__name__)
+debug = logger.debug
 
 
 _RANK_ALIASES = {

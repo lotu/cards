@@ -24,3 +24,7 @@ export GEMINI_API_KEY=""
 DO NOT COMMIT THE ACTUAL KEY INTO THE REPOSITORY
 
 source set_llm_env.sh
+
+run 
+python -u gameserver.py | tee -a logs.txt
+the -u makes python unbuffered which is needed for tee
