@@ -157,36 +157,6 @@ def parse_action(text: str, player_id: PlayerId) -> Optional[Action]:
 
     return None
 
-def resolve_player_id_old(text: str, name_map: Dict[str, PlayerId]) -> Tuple[Optional[PlayerId], str]:
-    """
-    Pure function to identify a player at the start of a string.
-    Returns (PlayerId, remaining_text) or (None, original_text).
-    """
-    s = text.strip()
-    
-    # 1. Match "p1" through "p4"
-    p_match = re.match(r"^p([1-4])\b\s*", s, re.IGNORECASE)
-    if p_match:
-        return PlayerId.from_num(int(p_match.group(1))), s[p_match.end():]
-
-    # 2. Match "Player 1" through "Player 4"
-    player_n_match = re.match(r"^player\s+([1-4])\b\s*", s, re.IGNORECASE)
-    if player_n_match:
-        return PlayerId.from_num(int(player_n_match.group(1))), s[player_n_match.end():]
-
-    # 3. Match names from the dictionary (sorted by length desc to find longest match)
-    sorted_names = sorted(name_map.keys(), key=len, reverse=True)
-    for name in sorted_names:
-        if s.lower().startswith(name.lower()):
-            # Check for word boundary after the name to avoid matching "Joe" in "Joelle"
-            name_len = len(name)
-            if name_len == len(s) or not s[name_len].isalnum():
-                remaining = s[name_len:].strip()
-                return name_map[name], remaining
-
-    return None, text
-
-
 def resolve_player_id(text: str, name_map: Dict[str, PlayerId]) -> Tuple[Optional[PlayerId], str]:
     """
     Attempts to identify a player at the start of a string.
@@ -322,12 +292,13 @@ def parse_card_move(text: str, player_idx: PlayerId) -> Optional[CardMove]:
     is_stack = False
 
     pp_matches = re.finditer(
-        r"(from|to|in|on)\s+(p[1-4]('s)?|my)?\s*(the)?\s*(tableau|table|board|discard|hand|pile|stack|deck|draw pile])?", s)
+        #r"(from|to|in|on)\s+(p[1-4]('s)?|my)?\s*(the)?\s*(tableau|table|board|discard|hand|pile|stack|deck|draw pile])?", s)
+        r"(from|to|in|on)\s+((?:player\s*|p)[1-4]('s)?|my)?\s*(the)?\s*(tableau|table|board|discard|hand|pile|stack|deck|draw pile])?", s)
     for pp_match in pp_matches:
         pp_player_num = None
         debug( f'pp_match 0: {pp_match.group(0)}, 1: {pp_match.group(1)}, 2: {pp_match.group(2)}, 3: {pp_match.group(3)}, 4: {pp_match.group(4)} ' )
         if pp_match.group(2):
-            player_match = re.search(r'p([1-4])', pp_match.group(2))
+            player_match = re.search(r'(?:player\s*|p)([1-4])', pp_match.group(2))
             pp_player_num = int(player_match.group(1)) if player_match else None
             if re.search(r'my', pp_match.group(2)):
                 pp_player_num = player_idx

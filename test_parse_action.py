@@ -34,6 +34,12 @@ test_parameters = [
     ("steal from p1 tableau", PLAYER_2, P1_TABLEAU, P2_HAND, None, 1),
     ("grab from p2 board", PLAYER_1, P2_TABLEAU, P1_HAND, None, 1),
 
+    # Using full name of player
+    ("take from Player 2", PLAYER_1, P2_HAND, P1_HAND, None, 1),
+    ("steal from Player 1's tableau", PLAYER_2, P1_TABLEAU, P2_HAND, None, 1),
+    ("take from player 2", PLAYER_1, P2_HAND, P1_HAND, None, 1),
+    ("give Ace of Spades to player 2", PLAYER_1, None, P2_HAND, [ACE_OF_SPADES], 1),
+
     # Giving to other players
     ("give Ace of Spades to p2", PLAYER_1, None, P2_HAND, [ACE_OF_SPADES], 1),
     ("send card to p1", PLAYER_2, P2_HAND, P1_HAND, None, 1),
