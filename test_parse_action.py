@@ -39,6 +39,7 @@ test_parameters = [
     ("steal from Player 1's tableau", PLAYER_2, P1_TABLEAU, P2_HAND, None, 1),
     ("take from player 2", PLAYER_1, P2_HAND, P1_HAND, None, 1),
     ("give Ace of Spades to player 2", PLAYER_1, None, P2_HAND, [ACE_OF_SPADES], 1),
+    ("Give player 1 K♡ K♠", PLAYER_2, None, P1_HAND, [KING_OF_HEARTS, KING_OF_SPADES], 2),
 
     # Giving to other players
     ("give Ace of Spades to p2", PLAYER_1, None, P2_HAND, [ACE_OF_SPADES], 1),

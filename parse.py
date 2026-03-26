@@ -352,13 +352,13 @@ def parse_card_move(text: str, player_idx: PlayerId) -> Optional[CardMove]:
             found_count = 1
 
     # 4. EXTRACT INTENT (The Verb)
-    s = s.strip()
+    ss = s.strip().split()
     # Taking CardMove default target is hand
-    is_draw = any(k in s for k in ["draw", "take", "get", "grab", "hit", "pick"])
-    is_steal = any(k in s for k in ["steal", "rob", "snatch"])
+    is_draw = any(k in ss for k in ["draw", "take", "get", "grab", "hit", "pick"])
+    is_steal = any(k in ss for k in ["steal", "rob", "snatch"])
     # Giving card_moves Default source is hand 
-    is_play = any(k in s for k in ["play", "put", "set", "lay", "place"])
-    is_give = any(k in s for k in ["give", "transfer", "send"]) # XXX pass was in here but removed
+    is_play = any(k in ss for k in ["play", "put", "set", "place"])
+    is_give = any(k in ss for k in ["give", "transfer", "send"]) # XXX pass was in here but removed
     is_discard_card_move = any(k in s for k in ["discard", "trash", "dump", "throw"])
 
     debug (f"s: {source}, t: {target}, cs: {found_cards}, cn: {found_count}")
@@ -380,6 +380,11 @@ def parse_card_move(text: str, player_idx: PlayerId) -> Optional[CardMove]:
         target = target or DISCARD
     if is_give:
         pass
+        if not target:
+            player_matches = re.finditer( r"(?:give|transfer|send)\s+(?:player\s*|p)([1-4])(:?'s)?", s)
+            for match in player_matches:
+                debug(f"player_match 0: {match.group(0)}, 1: {match.group(1)}")
+                target = Location.from_seat(int(match.group(1)), SeatPart.HAND)
         # Target must be another player; default to next player if not specified Not sure about default here
         #if not target:
             #target = Location.from_seat((player_idx.num % 4) + 1, SeatPart.HAND)

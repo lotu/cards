@@ -182,7 +182,7 @@ class Seat:
         return isinstance(other,Seat) and self.hand == other.hand and self.tableau == other.tableau
 
 class Table:
-    def __init__(self, seats = 4, empty=False):
+    def __init__(self, seats = 5, empty=False):
         self.deck = CardSet.standard_deck() if not empty else CardSet()
         self.stack = CardSet(stack=True)  # pile to draw from I didn't like draw.draw()
         self.discard = CardSet(stack=True)
@@ -366,7 +366,7 @@ def table_to_str_4_seats(t):
     replace_subgrid(grid,seat_to_grid(t.seats[0]),15,20)
     replace_subgrid(grid,seat_to_grid(t.seats[1]), 1,10)
     replace_subgrid(grid,seat_to_grid(t.seats[2]),15, 0)
-    replace_subgrid(grid,seat_to_grid(t.seats[3]),35,10)
+    replace_subgrid(grid,seat_to_grid(t.seats[3]),30,10)
 
     replace_subgrid(grid,card_grid(str(len(t.stack))), 20, 12)
     replace_subgrid(grid,card_grid(
