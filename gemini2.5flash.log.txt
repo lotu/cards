@@ -1,0 +1,295 @@
+================================================================================
+Starting Game Server At:  2026-03-25 19:01:54.468353
+Players:  4
+
+Player 1:FIFOPlayer(Player 1, fifo/p1_out, fifo/p1_in)
+Player 2:LLMPlayer(Player 2, gemini-2.5-flash, fifo/p2_out)
+Player 3:LLMPlayer(Player 3, gemini-2.5-flash, fifo/p3_out)
+Player 4:LLMPlayer(Player 4, gemini-2.5-flash, fifo/p4_out)
+================================================================================
+
+                                             
+                                             
+                                             
+                                             
+               -----------                   
+               6♠ 9♢ 4♢ 2♣                   
+               5♡ J♠ 9♣                      
+                                             
+                                             
+               Player 3                      
+                                             
+                                             
+                    ┌──┐                     
+                    │24│                     
+ -----------        └──┘           ----------
+ 8♢ 5♠ 6♣ T♡                       J♣ 5♢ 7♡ J
+ 8♠ 4♠ 5♣           ┌──┐           A♠ 3♠ Q♠  
+                    │  │                     
+                    └──┘                     
+ Player 2                          Player 4  
+                                             
+                                             
+                                             
+                                             
+               -----------                   
+               Q♣ 9♠ K♢ 7♢                   
+               8♡ 2♢ 4♣                      
+                                             
+                                             
+               Player 1                      
+
+--- Turn 1 ---
+
+Player 1: player 3 do you have any fours?
+                                             
+                                             
+                                             
+                                             
+               -----------                   
+               6♠ 9♢ 4♢ 2♣                   
+               5♡ J♠ 9♣                      
+                                             
+                                             
+               Player 3                      
+                                             
+                                             
+                    ┌──┐                     
+                    │24│                     
+ -----------        └──┘           ----------
+ 8♢ 5♠ 6♣ T♡                       J♣ 5♢ 7♡ J
+ 8♠ 4♠ 5♣           ┌──┐           A♠ 3♠ Q♠  
+                    │  │                     
+                    └──┘                     
+ Player 2                          Player 4  
+                                             
+                                             
+                                             
+                                             
+               -----------                   
+               Q♣ 9♠ K♢ 7♢                   
+               8♡ 2♢ 4♣                      
+                                             
+                                             
+               Player 1                      
+
+--- Turn 2 ---
+
+Player 2: Player 3, do you have any fours?
+                                             
+                                             
+                                             
+                                             
+               -----------                   
+               6♠ 9♢ 4♢ 2♣                   
+               5♡ J♠ 9♣                      
+                                             
+                                             
+               Player 3                      
+                                             
+                                             
+                    ┌──┐                     
+                    │24│                     
+ -----------        └──┘           ----------
+ 8♢ 5♠ 6♣ T♡                       J♣ 5♢ 7♡ J
+ 8♠ 4♠ 5♣           ┌──┐           A♠ 3♠ Q♠  
+                    │  │                     
+                    └──┘                     
+ Player 2                          Player 4  
+                                             
+                                             
+                                             
+                                             
+               -----------                   
+               Q♣ 9♠ K♢ 7♢                   
+               8♡ 2♢ 4♣                      
+                                             
+                                             
+               Player 1                      
+
+--- Turn 3 ---
+
+Player 1 draws 1 card from the stack to Player 1's hand
+Player 3: Go Fish
+                                             
+                                             
+                                             
+                                             
+               -----------                   
+               6♠ 9♢ 4♢ 2♣                   
+               5♡ J♠ 9♣                      
+                                             
+                                             
+               Player 3                      
+                                             
+                                             
+                    ┌──┐                     
+                    │23│                     
+ -----------        └──┘           ----------
+ 8♢ 5♠ 6♣ T♡                       J♣ 5♢ 7♡ J
+ 8♠ 4♠ 5♣           ┌──┐           A♠ 3♠ Q♠  
+                    │  │                     
+                    └──┘                     
+ Player 2                          Player 4  
+                                             
+                                             
+                                             
+                                             
+               -----------                   
+               Q♣ 9♠ K♢ 7♢                   
+               8♡ 2♢ 4♣ T♠                   
+                                             
+                                             
+               Player 1                      
+
+--- Turn 4 ---
+
+Player 1: yes I have nines
+Player 2: Player 4, do you have any eights?
+Player 3: Player 1, do you have any nines?
+Player 4: Player 1, do you have any Jacks?
+                                             
+                                             
+                                             
+                                             
+               -----------                   
+               6♠ 9♢ 4♢ 2♣                   
+               5♡ J♠ 9♣                      
+                                             
+                                             
+               Player 3                      
+                                             
+                                             
+                    ┌──┐                     
+                    │23│                     
+ -----------        └──┘           ----------
+ 8♢ 5♠ 6♣ T♡                       J♣ 5♢ 7♡ J
+ 8♠ 4♠ 5♣           ┌──┐           A♠ 3♠ Q♠  
+                    │  │                     
+                    └──┘                     
+ Player 2                          Player 4  
+                                             
+                                             
+                                             
+                                             
+               -----------                   
+               Q♣ 9♠ K♢ 7♢                   
+               8♡ 2♢ 4♣ T♠                   
+                                             
+                                             
+               Player 1                      
+
+--- Turn 5 ---
+
+Player 2 draws 1 card from the stack to Player 2's hand
+Player 4: Player 2, go fish.
+                                             
+                                             
+                                             
+                                             
+               -----------                   
+               6♠ 9♢ 4♢ 2♣                   
+               5♡ J♠ 9♣                      
+                                             
+                                             
+               Player 3                      
+                                             
+                                             
+                    ┌──┐                     
+                    │22│                     
+ -----------        └──┘           ----------
+ 8♢ 5♠ 6♣ T♡                       J♣ 5♢ 7♡ J
+ 8♠ 4♠ 5♣ T♢        ┌──┐           A♠ 3♠ Q♠  
+                    │  │                     
+                    └──┘                     
+ Player 2                          Player 4  
+                                             
+                                             
+                                             
+                                             
+               -----------                   
+               Q♣ 9♠ K♢ 7♢                   
+               8♡ 2♢ 4♣ T♠                   
+                                             
+                                             
+               Player 1                      
+
+--- Turn 6 ---
+
+Player 1: go fish
+Player 2 moves 8♢, 8♠ from anywhere to Player 2's tableau
+Player 2 moves T♡, T♢ from anywhere to Player 2's tableau
+Player 2 moves 5♠, 5♣ from anywhere to Player 2's tableau
+Player 2: Player 1, do you have any sixes?
+                                             
+                                             
+                                             
+                                             
+               -----------                   
+               6♠ 9♢ 4♢ 2♣                   
+               5♡ J♠ 9♣                      
+                                             
+                                             
+               Player 3                      
+ 8♢ 8♠ T♡ T♢                                 
+ 5♠ 5♣                                       
+                    ┌──┐                     
+                    │22│                     
+ -----------        └──┘           ----------
+ 6♣ 4♠                             J♣ 5♢ 7♡ J
+                    ┌──┐           A♠ 3♠ Q♠  
+                    │  │                     
+                    └──┘                     
+ Player 2                          Player 4  
+                                             
+                                             
+                                             
+                                             
+               -----------                   
+               Q♣ 9♠ K♢ 7♢                   
+               8♡ 2♢ 4♣ T♠                   
+                                             
+                                             
+               Player 1                      
+
+--- Turn 7 ---
+
+Player 2 draws 1 card from the stack to Player 2's hand
+Player 3 moves 9♢, 9♣ from anywhere to Player 3's tableau
+Player 3: Player 1, you said you had nines, but then you said go fish. That's a contradiction.
+Player 3 draws 1 card from the stack to Player 3's hand
+Player 4 moves J♣, J♢ from anywhere to Player 4's tableau
+Player 4: Player 1, do you have any Queens?
+               9♢ 9♣                         
+                                             
+                                             
+                                             
+               -----------                   
+               6♠ 4♢ 2♣ 5♡                   
+               J♠ 8♣                         
+                                             
+                                             
+               Player 3                      
+ 8♢ 8♠ T♡ T♢                       J♣ J♢     
+ 5♠ 5♣                                       
+                    ┌──┐                     
+                    │20│                     
+ -----------        └──┘           ----------
+ 6♣ 4♠ 3♣                          5♢ 7♡ A♠ 3
+                    ┌──┐           Q♠        
+                    │  │                     
+                    └──┘                     
+ Player 2                          Player 4  
+                                             
+                                             
+                                             
+                                             
+               -----------                   
+               Q♣ 9♠ K♢ 7♢                   
+               8♡ 2♢ 4♣ T♠                   
+                                             
+                                             
+               Player 1                      
+
+--- Turn 8 ---
+

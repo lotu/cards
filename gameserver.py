@@ -11,8 +11,9 @@ from parse import *
 
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.WARNING) 
-logger.setLevel(level=logging.DEBUG) 
+logging.basicConfig(level=logging.DEBUG) 
+logging.getLogger("parse").setLevel(logging.INFO)
+logger.setLevel(level=logging.INFO) 
 debug = logger.debug
 info = print
 

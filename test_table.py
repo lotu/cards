@@ -102,6 +102,16 @@ def test_locate_cards_respects_quantity_succuss():
     # Asking for two, but only one is there
     assert locate_cards(table, [ACE_OF_SPADES, ACE_OF_SPADES]) == P1_HAND
 
+def test_locate_cards_success():
+    """Verify finding a group of cards in a single location."""
+    table = Table(seats=2, empty=True)
+    my_cards = [ACE_OF_SPADES, KING_OF_SPADES, QUEEN_OF_SPADES]
+    table.seats[0].hand.add(my_cards)
+
+    assert locate_cards(table, my_cards) == P1_HAND
+
+
+
 # --------- Seat Sees Cards ---------------
 def test_seat_sees_cards_visibility_rules():
     """Verify strict visibility rules for players."""

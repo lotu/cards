@@ -1,8 +1,11 @@
 import random
-from logging import *
+import logging
 from typing import Iterable, List
 
 from enums import *
+
+logger = logging.getLogger(__name__)
+debug = logger.debug
 
 ##
 
@@ -179,7 +182,6 @@ class Seat:
         return isinstance(other,Seat) and self.hand == other.hand and self.tableau == other.tableau
 
 class Table:
-
     def __init__(self, seats = 4, empty=False):
         self.deck = CardSet.standard_deck() if not empty else CardSet()
         self.stack = CardSet(stack=True)  # pile to draw from I didn't like draw.draw()
@@ -194,7 +196,6 @@ class Table:
                                         and self.stack == other.stack \
                                         and self.discard == other.discard \
                                         and self.seats == other.seats
-
 
     def _get_cardset(self, location: Location):
         """Resolves a Location enum to a physical CardSet instance on the table."""
@@ -216,12 +217,14 @@ class Table:
 
     def execute_card_move(self, card_move: CardMove) -> bool:
         """Performs the physical movement of cards defined by the CardMove."""
+        debug(f"Execute Card Move: {card_move}")
         source = self._get_cardset(card_move.source)
         target = self._get_cardset(card_move.target)
         # Case 1: Moving a specific named card (e.g., from Discard)
         if card_move.cards:
             if source is None:
                 loc = locate_cards(self, card_move.cards)
+                debug(f"Card found at: {loc}")
                 if loc is None:
                     return False
                 source = self._get_cardset(loc)
@@ -302,6 +305,9 @@ def location_has_cards(table: Table, location: Location, cards: Card | Iterable[
     Checks if a specific Location on the table contains the specified card(s).
     Supports a single Card instance or an iterable of Cards.
     """
+    # Check if the location even exists 
+    if location.player is not None and len(table.seats) <= location.player.idx:
+        return False
     target_set = table._get_cardset(location)
 
     # Simple check for a single card
