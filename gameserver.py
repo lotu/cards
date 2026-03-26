@@ -11,13 +11,63 @@ from parse import *
 
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG) 
-logging.getLogger("parse").setLevel(logging.INFO)
-logger.setLevel(level=logging.INFO) 
+logging.basicConfig(level=logging.WARN) 
+#logging.getLogger("parse").setLevel(logging.INFO)
+#logger.setLevel(level=logging.DEBUG) 
 debug = logger.debug
 info = print
 
+INSTRUCTIONS = f"""
+You will be playing cards. 
+Respond briefly with commands in the form of text.
+The game server only keeps track of the cards it does not enforce any rules or turn order.
+You, the players, are responsible for knowing and following the rules.
+This means only acting when it is appropriate.
+If it is not appropriate for you to act reply with "pass" to do nothing.  
+You may communicate with other players with "Say <message>"
 
+In the middle of the table are:
+1. The stack, it is face down, the draw command defaults to the stack
+2. The discard, it is face up, the discard command put cards here.
+
+Each player has:
+1. A hand, which is hidden.
+2. A tableau, which is visible to all players, when you play a card it goes here.
+
+Example commands to move cards: 
+Draw 2 cards: Move the top two card of the stack to your hand
+Discard ace of spades: Move the ace of spades to the discard pile
+play 2♣: Put the 2 of clubs from your hand into your tableau
+take 1 card from player 2: Move one random card from player 2's hand to your own
+give player 1 3♣ 4♢: Move the three of clubs and the 4 of diamonds to player 1's hand
+
+You my use Unicode or spell out the card names.
+
+You will be playing with 3 other AIs.
+If the rules are unclear come to an agreement as a group.  You are responsible for dealing
+with any mistakes made by other players, the engine will not do that for you.
+
+You will be player Go Fish
+
+Rules of Go Fish:
+
+* Player 1 starts 
+* If you have a set of four matching cards, you may play it in your tableau
+* If you need other cards to complete a set, you may ask another player for the specific cards.  
+* That player must then give you all the cards you asked for.
+* If you recive the cards you asked for, you may either lay dow a set or continue to play by asking the same or another player for cards.  
+* As long as you get the cards you ask for you may keep going.
+* If the player you asked doesn't have the cards you request, they should tell you to "Go Fish!"
+* If you are told to "Go Fish," draw a card from the stack.  If it turns out to be the kind you asked for tell everyone what it is and add it to your hand.  Then continue to play by asking another player for specific cards.
+* If you draw a card you didn't ask for, keep it and your turn is over.
+* Play goes plyaer 1, 2, 3, 4 then back to player 1
+* If you play the last card in your hand draw 1 card
+* Play continues until the draw pile is empty 
+
+WINNING:
+Who every has play the most sets of cards wins
+
+You are"""
 
 # Abstract Player Class
 class Player:
@@ -118,8 +168,9 @@ class FIFOPlayer(Player):
 
 class LLMPlayer(Player):
     def __init__(self, player_id, fifo_dir, api_key=None,
-                 model_id="gemini-2.5-flash"
-                 #model_id="gemini-3.1-pro-preview"
+                 #model_id="gemini-2.5-flash"
+                 # model_id="gemini-2.5-pro"
+                 model_id="gemini-3.1-pro-preview"
                  ):
         super().__init__(player_id)
         # Gemini setup
@@ -137,39 +188,8 @@ class LLMPlayer(Player):
 
     def connect(self):
         # 1. Initialize Gemini
-        instructions = (
-            f"""
-            You will be playing cards. 
-            Respond briefly with commands in the form of text.
-            The game server only keeps track of the cards it does not enforce any rules or turn order.
-            You, the players, are responsible for knowing and following the rules.
-            This means only acting when it is appropriate.
-            If it is not appropriate for you to act reply with "pass" to do nothing.  
-            You may communicate with other players with "Say <message>"
+        instructions = f"{INSTRUCTIONS} {self.name}."
 
-            In the middle of the table are:
-            1. The stack, it is face down, the draw command defaults to the stack
-            2. The discard, it is face up, the discard command put cards here.
-
-            Each player has:
-            1. A hand, which is hidden.
-            2. A tableau, which is visible to all players, when you play a card it goes here.
-
-            Example commands to move cards: 
-            Draw 2 cards: Move the top two card of the stack to your hand
-            Discard ace of spades: Move the ace of spades to the discard pile
-            play 2♣: Put the 2 of clubs from your hand into your tableau
-            take 1 card from player 2: Move one random card from player 2's hand to your own
-            give player 1 3♣ 4♢: Move the three of clubs and the 4 of diamonds to player 1's hand
-            
-            You my use Unicode or spell out the card names.
-
-            You will be playing Go Fish with 3 other AIs.
-            If the rules are unclear come to an agreement as a group.
-            Player 1 starts 
-
-            You are {self.name}.
- """)
         self.chat_session = self.client.aio.chats.create(
             model=self.model_id,
             config={'system_instruction': instructions}
@@ -225,11 +245,12 @@ class LLMPlayer(Player):
 ## 
 
 class GameServer:
-    def __init__(self, player_count=2, fifo_dir="fifo", test=False):
+    def __init__(self, player_count=4, fifo_dir="fifo", test=False):
         print("=" * 80)
         print("Starting Game Server At: ", datetime.now())
         print("Players: ", player_count)
         print()
+        print(INSTRUCTIONS)
         # UI Control Booleans
         self.show_text_desc = False
         self.show_grid_ui = True
@@ -239,12 +260,12 @@ class GameServer:
             self.players = [FIFOPlayer(PlayerId.from_num(i), fifo_dir) for i in range(1, player_count + 1)]
         else:
             self.players = [
-                #LLMPlayer(PLAYER_1, fifo_dir),
-                FIFOPlayer(PLAYER_1, fifo_dir),
-                FIFOPlayer(PLAYER_2, fifo_dir),
-                #LLMPlayer(PLAYER_2, fifo_dir),
-                # LLMPlayer(PLAYER_3, fifo_dir),
-                # LLMPlayer(PLAYER_4, fifo_dir),
+                LLMPlayer(PLAYER_1, fifo_dir),
+                #FIFOPlayer(PLAYER_1, fifo_dir),
+                #FIFOPlayer(PLAYER_2, fifo_dir),
+                LLMPlayer(PLAYER_2, fifo_dir),
+                LLMPlayer(PLAYER_3, fifo_dir),
+                LLMPlayer(PLAYER_4, fifo_dir),
             ]
         self.turn_number = 1
 
@@ -310,6 +331,7 @@ class GameServer:
                 for i, text in enumerate(inputs):
                     p = PlayerId.from_index(i)
                     # card move source
+                    debug(f"{p}: sent: {text}")
                     for line in text.split('\n'):
                         action = parse_action(line, p)
                         if action:
