@@ -1,13 +1,11 @@
 import asyncio
-import sys
 import os
-import re
 import logging 
 from datetime import datetime
 from google import genai
+from google.genai import types
 from openai import AsyncOpenAI  # Added for ChatGPT support
-from anthropic import AsyncAnthropic
-from cards import Table, table_to_str, describe_table
+from cards import Table, table_to_str, describe_table, seat_sees_cards
 from enums import *
 from parse import *
 
@@ -168,89 +166,12 @@ class FIFOPlayer(Player):
             # Sleep a tiny bit to prevent 100% CPU usage while polling
             await asyncio.sleep(0.1)
 
-class LLMPlayerOld(Player):
-    def __init__(self, player_id, fifo_dir, api_key=None,
-                 #model_id="gemini-2.5-flash"
-                 # model_id="gemini-2.5-pro"
-                 model_id="gemini-3.1-pro-preview"
-                 ):
-        super().__init__(player_id)
-        # Gemini setup
-        self.client = genai.Client(api_key=api_key)
-        self.model_id = model_id
-        self.chat_session = None
-        self.pending_message = ""
-
-        # Mirroring setup (using your FIFO structure)
-        self.out_path = os.path.join(fifo_dir, f"p{self.id.num}_out")
-        self.fd_out = None
-
-    def __repr__(self):
-        return f"{self.id}:LLMPlayer({self.name}, {self.model_id}, {self.out_path})"
-
-    def connect(self):
-        # 1. Initialize Gemini
-        instructions = f"{INSTRUCTIONS} {self.name}."
-
-        self.chat_session = self.client.aio.chats.create(
-            model=self.model_id,
-            config={'system_instruction': instructions}
-        )
-
-        # 2. Open the output FIFO for mirroring
-        # We use Non-blocking so the server doesn't hang if no one is listening
-        try:
-            self.fd_out = os.open(self.out_path, os.O_WRONLY | os.O_NONBLOCK)
-            debug(f"-> {self.name} mirroring to {self.out_path}")
-        except OSError:
-            error(f"-> {self.name} could not open mirror pipe (no listener).")
-
-    def _write_to_mirror(self, text):
-        """Helper to push text to the FIFO if open."""
-        if self.fd_out is not None:
-            try:
-                os.write(self.fd_out, text.encode())
-            except OSError:
-                # Listener likely disconnected
-                pass
-
-    def send_message(self, message):
-        """Messages from the server (Table state, game logs)."""
-        # Mirror the incoming server message so we see what the LLM sees
-        self._write_to_mirror(f"[SERVER -> LLM]:\n{message}")
-
-        # Buffer for the actual API call
-        self.pending_message += message + "\n"
-
-    # TODO This should return (Player, str)
-    async def wait_for_input(self) -> str:
-        if not self.pending_message:
-            return ""
-
-        prompt = self.pending_message
-        self.pending_message = ""
-
-        try:
-            # Call the LLM
-            response = await self.chat_session.send_message(prompt)
-            self.last_input = response.text.strip()
-
-            # Mirror the LLM's response to the FIFO
-            self._write_to_mirror(f"\n[LLM -> SERVER]: {self.last_input}\n")
-
-            return self.last_input
-        except Exception as e:
-            error_msg = f"!! LLM Error: {e}"
-            self._write_to_mirror(f"\n{error_msg}\n")
-            return "pass"
-
-
 # --- Base LLM Class ---
 
 class LLMPlayer(Player):
     """
-    Abstract base for LLM-driven players. 
-    Handles FIFO mirroring and message buffering.
+    Abstract base for all LLM players. 
+    Handles FIFO mirroring, message buffering, and reasoning logs.
     """
     def __init__(self, player_id, fifo_dir, model_id):
         super().__init__(player_id)
@@ -261,27 +182,41 @@ class LLMPlayer(Player):
         self.out_path = os.path.join(fifo_dir, f"p{self.id.num}_out")
         self.fd_out = None
 
+    def __repr__(self):
+        return f"{self.id}:LLMPlayer({self.name}, {self.model_id}, {self.out_path})"
+
     def connect(self):
-        """Open the output FIFO for mirroring."""
+        """Opens the output FIFO. Fails gracefully if no listener is present."""
         try:
+            # Open non-blocking so the server doesn't hang if no one is 'tailing' the pipe
             self.fd_out = os.open(self.out_path, os.O_WRONLY | os.O_NONBLOCK)
             debug(f"-> {self.name} mirroring to {self.out_path}")
         except OSError:
-            print(f"!! {self.name} could not open mirror pipe (no listener).")
+            pass 
 
-    def _write_to_mirror(self, text):
+    def _write_to_mirror(self, text: str):
+        """Helper to write raw text to the FIFO pipe."""
         if self.fd_out is not None:
             try:
                 os.write(self.fd_out, text.encode())
             except OSError:
                 pass
 
-    def send_message(self, message):
+    def _log_thinking(self, reasoning: str):
+        """Standard method to display 'Chain of Thought' in the mirror pipe."""
+        header = f"\n{'='*10} {self.name} THINKING {'='*10}\n"
+        footer = f"\n{'='*(30 + len(self.name))}\n"
+        output = f"{header}{reasoning}{footer}"
+        self._write_to_mirror(output)
+        print(output)
+
+    def send_message(self, message: str):
         """Buffer incoming server messages and mirror them."""
-        self._write_to_mirror(f"[SERVER -> LLM]:\n{message}")
+        self._write_to_mirror(f"[SERVER -> {self.name}]:\n{message}\n")
         self.pending_message += message + "\n"
 
     async def wait_for_input(self) -> str:
+        """The main loop calls this; it handles the buffering logic and API calls."""
         if not self.pending_message:
             return ""
 
@@ -290,97 +225,86 @@ class LLMPlayer(Player):
 
         try:
             response_text = await self._get_llm_response(prompt)
-            self.last_input = response_text.strip()
-            self._write_to_mirror(f"\n[LLM -> SERVER]: {self.last_input}\n")
-            return self.last_input
+            clean_input = response_text.strip()
+            
+            self._write_to_mirror(f"[{self.name} -> SERVER]: {clean_input}\n")
+            self.last_input = clean_input
+            return clean_input
         except Exception as e:
-            error_msg = f"!! LLM Error ({self.__class__.__name__}): {e}"
-            self._write_to_mirror(f"\n{error_msg}\n")
+            err = f"!! {self.__class__.__name__} Error: {e}"
+            self._write_to_mirror(f"\n{err}\n")
             return "pass"
 
     async def _get_llm_response(self, prompt: str) -> str:
-        """Override this in child classes to call specific APIs."""
+        """Override in subclasses to call specific AI APIs."""
         raise NotImplementedError
 
 
-# --- Concrete Gemini Implementation ---
+# --- Concrete Gemini Player ---
 
-class GeminiPlayerSimple(LLMPlayer):
-    def __init__(self, player_id, fifo_dir, api_key=None, model_id="gemini-3.1-pro-preview"):
-        super().__init__(player_id, fifo_dir, model_id)
-        self.client = genai.Client(api_key=api_key)
-        self.chat_session = None
-
-    def connect(self):
-        super().connect()
-        instructions = f"{INSTRUCTIONS} {self.name}."
-        self.chat_session = self.client.aio.chats.create(
-            model=self.model_id,
-            config={'system_instruction': instructions}
-        )
-
-    async def _get_llm_response(self, prompt: str) -> str:
-        response = await self.chat_session.send_message(prompt)
-        return response.text
-
-
-# Thinking version
 class GeminiPlayer(LLMPlayer):
-    def __init__(self, player_id, fifo_dir, api_key=None, model_id="gemini-3.1-pro-preview"):
+    def __init__(self, player_id, fifo_dir, model_id="gemini-2.5-flash", api_key=None):
         super().__init__(player_id, fifo_dir, model_id)
         self.client = genai.Client(api_key=api_key)
         self.chat_session = None
 
+        # Determine which thinking parameter to use
+        if "gemini-3" in self.model_id:
+            #thinking_level='LOW',    # HIGH, MEDIUM, LOW, MINIMAL gemini 3
+            thinking_params = {'thinking_level': 'MEDIUM'}
+        else:
+            # Fallback for Gemini 2.5
+                # thinking_budget=16000,   # Integer: max tokens for reasoning (0 to 24576) -1 dynamic gemini 2.5
+            thinking_params = {'thinking_budget': 4096} # Or -1 for
+
+        self.chat_config = types.GenerateContentConfig(
+            # 1. Thinking settings (the reasoning phase)
+            thinking_config=types.ThinkingConfig(
+                include_thoughts=True,   # Boolean: returns the "chain of thought"
+                **thinking_params
+            ),
+
+            # 2. General model settings (the final output phase)
+            temperature=0.7,             # Float: randomness of the final answer
+            max_output_tokens=1000,      # Integer: limit on the final response length
+            top_p=0.95,                  # Float: nucleus sampling
+            system_instruction= f"{INSTRUCTIONS} {self.name}"
+)
+
     def connect(self):
         super().connect()
-        instructions = f"{INSTRUCTIONS} {self.name}."
-
-        # Enable thinking in the configuration
-        # In Gemini 3, 'thinking_level' controls depth;
-        # 'include_thoughts' ensures we can extract the reasoning trace.
-        config = {
-            'system_instruction': instructions,
-            'thinking_config': {'include_thoughts': True},
-            'thinking_level': 'HIGH'  # Options: MINIMAL, MEDIUM, HIGH
-        }
-
+        # Initializing chat with system instructions
         self.chat_session = self.client.aio.chats.create(
             model=self.model_id,
-            config=config
+            config=self.chat_config
         )
 
     async def _get_llm_response(self, prompt: str) -> str:
         response = await self.chat_session.send_message(prompt)
+        
+        reasoning_trace = []
+        final_text = ""
 
-        reasoning_parts = []
-        final_answer = ""
-
-        # Gemini responses consist of multiple 'parts'.
-        # We loop through them to find what is 'thought' vs 'text'.
+        # Extract 'thought' parts vs 'text' parts
         for part in response.candidates[0].content.parts:
             if hasattr(part, 'thought') and part.thought:
-                reasoning_parts.append(part.text)
-            else:
-                final_answer += part.text
+                reasoning_trace.append(part.text)
+            elif part.text:
+                final_text += part.text
 
-        # Mirror the thinking process to your FIFO pipe
-        if reasoning_parts:
-            thought_trace = "\n".join(reasoning_parts)
-            self._write_to_mirror(f"\n[GEMINI THINKING]:\n{thought_trace}\n")
+        if reasoning_trace:
+            self._log_thinking("\n".join(reasoning_trace))
+            
+        return final_text
 
-        return final_answer.strip()
 
-# --- Concrete ChatGPT Implementation ---
+# --- Concrete ChatGPT Player ---
 
 class ChatGPTPlayer(LLMPlayer):
-    def __init__(self, player_id, fifo_dir, api_key=None, model_id="gpt-4-turbo"):
+    def __init__(self, player_id, fifo_dir, model_id="gpt-4o", api_key=None):
         super().__init__(player_id, fifo_dir, model_id)
         self.client = AsyncOpenAI(api_key=api_key)
-        # OpenAI doesn't have a "ChatSession" object like Gemini, 
-        # so we maintain history manually.
-        self.messages = [
-            {"role": "system", "content": f"{INSTRUCTIONS} {self.name}."}
-        ]
+        self.messages = [{"role": "system", "content": f"{INSTRUCTIONS} You are {self.name}."}]
 
     async def _get_llm_response(self, prompt: str) -> str:
         self.messages.append({"role": "user", "content": prompt})
@@ -391,56 +315,43 @@ class ChatGPTPlayer(LLMPlayer):
         )
         
         answer = response.choices[0].message.content
-        # Maintain history for context
+        
+        # Standard GPT-4o doesn't have a separate reasoning field yet,
+        # but if using o1/o3, you would access 'reasoning_content' here.
+        if hasattr(response.choices[0].message, 'reasoning_content'):
+            thought = response.choices[0].message.reasoning_content
+            if thought: self._log_thinking(thought)
+
         self.messages.append({"role": "assistant", "content": answer})
         return answer
 
 
-# Pro Tip: If the DeepSeek API is slow or busy (common for R1), you can use the exact same class with OpenRouter or Groq by simply changing the base_url and model_id (e.g., deepseek/deepseek-r1 on OpenRouter).
+# --- Concrete DeepSeek Player ---
+# Pro Tip: If the DeepSeek API is slow or busy (common for R1), you can use
+# lthe exact same class with OpenRouter or Groq by simply changing the base_url
+# and model_id (e.g., deepseek/deepseek-r1 on OpenRouter).
 class DeepSeekPlayer(LLMPlayer):
-    """
-    DeepSeek-R1 implementation.
-    Uses the 'deepseek-reasoner' model which provides a separate
-    'reasoning_content' field for its internal thinking process.
-    """
-    def __init__(self, player_id, fifo_dir, api_key=None, model_id="deepseek-reasoner"):
-        # Note: 'deepseek-reasoner' is the API ID for the R1 reasoning model
+    def __init__(self, player_id, fifo_dir, model_id="deepseek-reasoner", api_key=None):
         super().__init__(player_id, fifo_dir, model_id)
-
-        # DeepSeek uses the OpenAI SDK but requires their base_url
-        self.client = AsyncOpenAI(
-            api_key=api_key,
-            base_url="https://api.deepseek.com"
-        )
-
-        self.messages = [
-            {"role": "system", "content": f"{INSTRUCTIONS} {self.name}."}
-        ]
+        self.client = AsyncOpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+        self.messages = [{"role": "system", "content": f"{INSTRUCTIONS} You are {self.name}."}]
 
     async def _get_llm_response(self, prompt: str) -> str:
         self.messages.append({"role": "user", "content": prompt})
-
+        
         response = await self.client.chat.completions.create(
             model=self.model_id,
             messages=self.messages
         )
-
-        # Extract the separate reasoning block (the 'thinking' part)
-        # and the final answer (the game command)
-        msg_obj = response.choices[0].message
-        reasoning = getattr(msg_obj, 'reasoning_content', "")
-        answer = msg_obj.content
-
-        # Mirror the "Thinking" process to the FIFO so you can see it
-        # in the terminal, even though the game server only gets the answer.
-        if reasoning:
-            self._write_to_mirror(f"\n[DEEPSEEK THINKING]:\n{reasoning}\n")
-
-        # For history, DeepSeek recommends only saving the 'content',
-        # not the 'reasoning_content', to save tokens/context space.
+        
+        # R1 provides thinking in 'reasoning_content'
+        msg = response.choices[0].message
+        if hasattr(msg, 'reasoning_content') and msg.reasoning_content:
+            self._log_thinking(msg.reasoning_content)
+            
+        answer = msg.content
         self.messages.append({"role": "assistant", "content": answer})
-
-        return answer
+        return answere
 ## 
 
 class GameServer:
@@ -458,14 +369,21 @@ class GameServer:
         if test:
             self.players = [FIFOPlayer(PlayerId.from_num(i), fifo_dir) for i in range(1, player_count + 1)]
         else:
+            #"gemini-2.5-flash-lite"
+            #"gemini-2.5-flash"
+            #"gemini-2.5-pro"
+            #"gemini-3.1-pro-preview"
+            #"gemini-3-flash-preview"
+            #"gemini-3.1-flash-lite-preview"
             self.players = [
-                LLMPlayer(PLAYER_1, fifo_dir),
+                GeminiPlayer(PLAYER_1, fifo_dir),
                 #FIFOPlayer(PLAYER_1, fifo_dir),
                 #FIFOPlayer(PLAYER_2, fifo_dir),
-                LLMPlayer(PLAYER_2, fifo_dir),
-                LLMPlayer(PLAYER_3, fifo_dir),
-                LLMPlayer(PLAYER_4, fifo_dir),
+                GeminiPlayer(PLAYER_2, fifo_dir),
+                GeminiPlayer(PLAYER_3, fifo_dir),
+                GeminiPlayer(PLAYER_4, fifo_dir, "gemini-3.1-pro-preview"),
             ]
+
         self.turn_number = 1
 
         for p in self.players:
@@ -559,8 +477,11 @@ class GameServer:
             self.handle_card_move(actor_id, intent)
 
     def handle_card_move(self, actor_id: PlayerId, card_move: CardMove):
-        if self.table.execute_card_move(card_move):
-            print(actor_id, card_move)
+        # We can exectue if we have a specific source, the cards aren't specificed
+        # or the playe can see them.
+        if card_move.source is not None or not card_move.cards or  seat_sees_cards(self.table, actor_id.idx, card_move.cards):
+            cards = self.table.execute_card_move(card_move)
+            print(actor_id, card_move, cards)
             # Broadcast the move to everyone for transparency
             for p in self.players:
                 p.send_card_move(actor_id, card_move)

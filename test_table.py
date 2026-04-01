@@ -104,7 +104,7 @@ def test_locate_cards_respects_quantity_succuss():
 
 def test_locate_cards_success():
     """Verify finding a group of cards in a single location."""
-    table = Table(seats=2, empty=True)
+    table = Table(seats=3, empty=True)
     my_cards = [ACE_OF_SPADES, KING_OF_SPADES, QUEEN_OF_SPADES]
     table.seats[0].hand.add(my_cards)
 
@@ -133,12 +133,13 @@ def test_seat_sees_cards_visibility_rules():
 # --------- Execute CardMove ----------------
 
 
-@pytest.mark.parametrize("card_move, setup_cards, expected_source_len, expected_target_len", [
+@pytest.mark.parametrize("card_move, setup_cards, moved_cards, expected_source_len, target_cards", [
     # Scenario 1: Player 1 plays a card from hand to their own tableau
     (
         CardMove(source=P1_HAND, target=P1_TABLEAU, cards=ACE_OF_SPADES),
-        {P1_HAND: [ACE_OF_SPADES], P1_TABLEAU: []},
-        0, 1
+        {P1_HAND: [ACE_OF_SPADES], P1_TABLEAU: [TWO_OF_SPADES]},
+        [ACE_OF_SPADES],
+        0, [TWO_OF_SPADES, ACE_OF_SPADES] 
     ),
     # Move with card set not properlly done XXX
     # # Scenario 1: Player 1 plays a card from hand to their own tableau
@@ -151,17 +152,43 @@ def test_seat_sees_cards_visibility_rules():
     # # Scenario 2: Player 1 takes 1 random card from Player 2's hand
     (
         CardMove(source=P2_HAND, target=P1_HAND, count=1),
-        {P2_HAND: [KING_OF_CLUBS, QUEEN_OF_CLUBS], P1_HAND: []},
-        1, 1
+        {P2_HAND: [KING_OF_CLUBS, QUEEN_OF_CLUBS], P1_HAND: [TWO_OF_HEARTS]},
+        [KING_OF_CLUBS],
+        1, [TWO_OF_HEARTS, KING_OF_CLUBS] 
+    ),
+    
+    # Player takes cards from stack
+    (
+        CardMove(source=STACK, target=P1_HAND, count=2),
+        {STACK: [KING_OF_CLUBS, QUEEN_OF_CLUBS, JACK_OF_CLUBS], P1_HAND: []},
+        [KING_OF_CLUBS, QUEEN_OF_CLUBS],
+        1, [KING_OF_CLUBS, QUEEN_OF_CLUBS],
+    ),
+
+    # Player takes cards from discard
+    (
+        CardMove(source=DISCARD, target=P1_HAND, count=2),
+        {DISCARD: [KING_OF_CLUBS, QUEEN_OF_CLUBS, JACK_OF_CLUBS], P1_HAND: []},
+        [KING_OF_CLUBS, QUEEN_OF_CLUBS],
+        1, [KING_OF_CLUBS, QUEEN_OF_CLUBS],
+    ),
+
+    # Player discards note ordering of target
+    (
+        CardMove(source=P1_HAND, target=DISCARD, count=2),
+        {P1_HAND: [KING_OF_CLUBS, QUEEN_OF_CLUBS, JACK_OF_CLUBS], DISCARD: [THREE_OF_HEARTS]},
+        [KING_OF_CLUBS, QUEEN_OF_CLUBS],
+        1, [KING_OF_CLUBS, QUEEN_OF_CLUBS, THREE_OF_HEARTS],
     ),
     # Scenario 3: Player 1 steals a specific card from Player 2's tableau
     (
         CardMove(source=P2_TABLEAU, target=P1_HAND, cards=TEN_OF_DIAMONDS),
-        {P2_TABLEAU: [TEN_OF_DIAMONDS], P1_HAND: []},
-        0, 1
+        {P2_TABLEAU: [TEN_OF_DIAMONDS, ACE_OF_SPADES], P1_HAND: []},
+        [TEN_OF_DIAMONDS],
+        1, [TEN_OF_DIAMONDS]
     ),
 ])
-def test_execute_player_moves_old(table, card_move, setup_cards, expected_source_len, expected_target_len):
+def test_execute_player_moves_old(table, card_move, setup_cards, moved_cards, expected_source_len, target_cards):
     """Verify Table.execute_card_move correctly moves cards between player zones."""
     # 1. Setup the state
     for loc, card_list in setup_cards.items():
@@ -170,11 +197,11 @@ def test_execute_player_moves_old(table, card_move, setup_cards, expected_source
         cardset.cards = list(card_list)
 
     # 2. Execute
-    table.execute_card_move(card_move)
+    assert moved_cards == table.execute_card_move(card_move)
 
     # 3. Verify
     assert len(table._get_cardset(card_move.source).cards) == expected_source_len
-    assert len(table._get_cardset(card_move.target).cards) == expected_target_len
+    assert target_cards == table._get_cardset(card_move.target).cards
 
     # If a specific card was moved, verify it's in the target
     if card_move.cards:

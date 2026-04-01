@@ -182,7 +182,7 @@ class Seat:
         return isinstance(other,Seat) and self.hand == other.hand and self.tableau == other.tableau
 
 class Table:
-    def __init__(self, seats = 5, empty=False):
+    def __init__(self, seats = 4, empty=False):
         self.deck = CardSet.standard_deck() if not empty else CardSet()
         self.stack = CardSet(stack=True)  # pile to draw from I didn't like draw.draw()
         self.discard = CardSet(stack=True)
@@ -220,6 +220,7 @@ class Table:
         debug(f"Execute Card Move: {card_move}")
         source = self._get_cardset(card_move.source)
         target = self._get_cardset(card_move.target)
+        cards = []
         # Case 1: Moving a specific named card (e.g., from Discard)
         if card_move.cards:
             if source is None:
@@ -231,18 +232,18 @@ class Table:
             debug(f"source: {source}")
             debug(f"target: {target}")
             cards = target.add(source.pick(card_move.cards))
-            return len(cards) != 0
+            #return len(cards) != 0
 
         # Case 2: Moving a quantity of cards (e.g., Drawing from Stack)
         else:
             # We draw whatever is available up to the requested count
             actual_count = min(len(source.cards), card_move.count)
             if len(source) >= card_move.count:
-                target.add( source.draw(actual_count) )
+                cards = target.add( source.draw(actual_count) )
             else:
                 return False
 
-        return True
+        return cards
    ##
 
 def seat_sees_cards(table: Table, seat_index: int, cards: Iterable[Card]) -> bool:
