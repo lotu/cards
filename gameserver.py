@@ -2,9 +2,11 @@ import asyncio
 import sys
 import os
 import re
+import logging 
 from datetime import datetime
 from google import genai
-import logging 
+from openai import AsyncOpenAI  # Added for ChatGPT support
+from anthropic import AsyncAnthropic
 from cards import Table, table_to_str, describe_table
 from enums import *
 from parse import *
@@ -166,7 +168,7 @@ class FIFOPlayer(Player):
             # Sleep a tiny bit to prevent 100% CPU usage while polling
             await asyncio.sleep(0.1)
 
-class LLMPlayer(Player):
+class LLMPlayerOld(Player):
     def __init__(self, player_id, fifo_dir, api_key=None,
                  #model_id="gemini-2.5-flash"
                  # model_id="gemini-2.5-pro"
@@ -242,6 +244,203 @@ class LLMPlayer(Player):
             self._write_to_mirror(f"\n{error_msg}\n")
             return "pass"
 
+
+# --- Base LLM Class ---
+
+class LLMPlayer(Player):
+    """
+    Abstract base for LLM-driven players. 
+    Handles FIFO mirroring and message buffering.
+    """
+    def __init__(self, player_id, fifo_dir, model_id):
+        super().__init__(player_id)
+        self.model_id = model_id
+        self.pending_message = ""
+        
+        # Mirroring setup (FIFO structure)
+        self.out_path = os.path.join(fifo_dir, f"p{self.id.num}_out")
+        self.fd_out = None
+
+    def connect(self):
+        """Open the output FIFO for mirroring."""
+        try:
+            self.fd_out = os.open(self.out_path, os.O_WRONLY | os.O_NONBLOCK)
+            debug(f"-> {self.name} mirroring to {self.out_path}")
+        except OSError:
+            print(f"!! {self.name} could not open mirror pipe (no listener).")
+
+    def _write_to_mirror(self, text):
+        if self.fd_out is not None:
+            try:
+                os.write(self.fd_out, text.encode())
+            except OSError:
+                pass
+
+    def send_message(self, message):
+        """Buffer incoming server messages and mirror them."""
+        self._write_to_mirror(f"[SERVER -> LLM]:\n{message}")
+        self.pending_message += message + "\n"
+
+    async def wait_for_input(self) -> str:
+        if not self.pending_message:
+            return ""
+
+        prompt = self.pending_message
+        self.pending_message = ""
+
+        try:
+            response_text = await self._get_llm_response(prompt)
+            self.last_input = response_text.strip()
+            self._write_to_mirror(f"\n[LLM -> SERVER]: {self.last_input}\n")
+            return self.last_input
+        except Exception as e:
+            error_msg = f"!! LLM Error ({self.__class__.__name__}): {e}"
+            self._write_to_mirror(f"\n{error_msg}\n")
+            return "pass"
+
+    async def _get_llm_response(self, prompt: str) -> str:
+        """Override this in child classes to call specific APIs."""
+        raise NotImplementedError
+
+
+# --- Concrete Gemini Implementation ---
+
+class GeminiPlayerSimple(LLMPlayer):
+    def __init__(self, player_id, fifo_dir, api_key=None, model_id="gemini-3.1-pro-preview"):
+        super().__init__(player_id, fifo_dir, model_id)
+        self.client = genai.Client(api_key=api_key)
+        self.chat_session = None
+
+    def connect(self):
+        super().connect()
+        instructions = f"{INSTRUCTIONS} {self.name}."
+        self.chat_session = self.client.aio.chats.create(
+            model=self.model_id,
+            config={'system_instruction': instructions}
+        )
+
+    async def _get_llm_response(self, prompt: str) -> str:
+        response = await self.chat_session.send_message(prompt)
+        return response.text
+
+
+# Thinking version
+class GeminiPlayer(LLMPlayer):
+    def __init__(self, player_id, fifo_dir, api_key=None, model_id="gemini-3.1-pro-preview"):
+        super().__init__(player_id, fifo_dir, model_id)
+        self.client = genai.Client(api_key=api_key)
+        self.chat_session = None
+
+    def connect(self):
+        super().connect()
+        instructions = f"{INSTRUCTIONS} {self.name}."
+
+        # Enable thinking in the configuration
+        # In Gemini 3, 'thinking_level' controls depth;
+        # 'include_thoughts' ensures we can extract the reasoning trace.
+        config = {
+            'system_instruction': instructions,
+            'thinking_config': {'include_thoughts': True},
+            'thinking_level': 'HIGH'  # Options: MINIMAL, MEDIUM, HIGH
+        }
+
+        self.chat_session = self.client.aio.chats.create(
+            model=self.model_id,
+            config=config
+        )
+
+    async def _get_llm_response(self, prompt: str) -> str:
+        response = await self.chat_session.send_message(prompt)
+
+        reasoning_parts = []
+        final_answer = ""
+
+        # Gemini responses consist of multiple 'parts'.
+        # We loop through them to find what is 'thought' vs 'text'.
+        for part in response.candidates[0].content.parts:
+            if hasattr(part, 'thought') and part.thought:
+                reasoning_parts.append(part.text)
+            else:
+                final_answer += part.text
+
+        # Mirror the thinking process to your FIFO pipe
+        if reasoning_parts:
+            thought_trace = "\n".join(reasoning_parts)
+            self._write_to_mirror(f"\n[GEMINI THINKING]:\n{thought_trace}\n")
+
+        return final_answer.strip()
+
+# --- Concrete ChatGPT Implementation ---
+
+class ChatGPTPlayer(LLMPlayer):
+    def __init__(self, player_id, fifo_dir, api_key=None, model_id="gpt-4-turbo"):
+        super().__init__(player_id, fifo_dir, model_id)
+        self.client = AsyncOpenAI(api_key=api_key)
+        # OpenAI doesn't have a "ChatSession" object like Gemini, 
+        # so we maintain history manually.
+        self.messages = [
+            {"role": "system", "content": f"{INSTRUCTIONS} {self.name}."}
+        ]
+
+    async def _get_llm_response(self, prompt: str) -> str:
+        self.messages.append({"role": "user", "content": prompt})
+        
+        response = await self.client.chat.completions.create(
+            model=self.model_id,
+            messages=self.messages
+        )
+        
+        answer = response.choices[0].message.content
+        # Maintain history for context
+        self.messages.append({"role": "assistant", "content": answer})
+        return answer
+
+
+# Pro Tip: If the DeepSeek API is slow or busy (common for R1), you can use the exact same class with OpenRouter or Groq by simply changing the base_url and model_id (e.g., deepseek/deepseek-r1 on OpenRouter).
+class DeepSeekPlayer(LLMPlayer):
+    """
+    DeepSeek-R1 implementation.
+    Uses the 'deepseek-reasoner' model which provides a separate
+    'reasoning_content' field for its internal thinking process.
+    """
+    def __init__(self, player_id, fifo_dir, api_key=None, model_id="deepseek-reasoner"):
+        # Note: 'deepseek-reasoner' is the API ID for the R1 reasoning model
+        super().__init__(player_id, fifo_dir, model_id)
+
+        # DeepSeek uses the OpenAI SDK but requires their base_url
+        self.client = AsyncOpenAI(
+            api_key=api_key,
+            base_url="https://api.deepseek.com"
+        )
+
+        self.messages = [
+            {"role": "system", "content": f"{INSTRUCTIONS} {self.name}."}
+        ]
+
+    async def _get_llm_response(self, prompt: str) -> str:
+        self.messages.append({"role": "user", "content": prompt})
+
+        response = await self.client.chat.completions.create(
+            model=self.model_id,
+            messages=self.messages
+        )
+
+        # Extract the separate reasoning block (the 'thinking' part)
+        # and the final answer (the game command)
+        msg_obj = response.choices[0].message
+        reasoning = getattr(msg_obj, 'reasoning_content', "")
+        answer = msg_obj.content
+
+        # Mirror the "Thinking" process to the FIFO so you can see it
+        # in the terminal, even though the game server only gets the answer.
+        if reasoning:
+            self._write_to_mirror(f"\n[DEEPSEEK THINKING]:\n{reasoning}\n")
+
+        # For history, DeepSeek recommends only saving the 'content',
+        # not the 'reasoning_content', to save tokens/context space.
+        self.messages.append({"role": "assistant", "content": answer})
+
+        return answer
 ## 
 
 class GameServer:
