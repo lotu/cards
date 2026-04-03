@@ -7,3 +7,5 @@ fifo
 .python-version
 scratch/
 set_llm_env.sh
+*.log
+logs/

@@ -60,7 +60,7 @@ Rules of Go Fish:
 * If the player you asked doesn't have the cards you request, they should tell you to "Go Fish!"
 * If you are told to "Go Fish," draw a card from the stack.  If it turns out to be the kind you asked for tell everyone what it is and add it to your hand.  Then continue to play by asking another player for specific cards.
 * If you draw a card you didn't ask for, keep it and your turn is over.
-* Play goes plyaer 1, 2, 3, 4 then back to player 1
+* Play goes player 1, 2, 3, 4 then back to player 1
 * If you play the last card in your hand draw 1 card
 * Play continues until the draw pile is empty 
 
